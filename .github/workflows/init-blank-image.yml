@@ -90,14 +90,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Login to GitHub Container Registry
-        if: github.event_name != 'pull_request'
-        uses: redhat-actions/podman-login@v1
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Build image
         uses: redhat-actions/buildah-build@v2
         id: build
@@ -112,6 +104,10 @@ jobs:
         uses: redhat-actions/push-to-registry@v2
         with:
           tags: ${{ steps.build.outputs.tags }}
+          image: ${{ env.IMAGE_NAME }}
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set package visibility to private
         if: github.event_name != 'pull_request'
