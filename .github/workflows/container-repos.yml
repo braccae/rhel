@@ -52,7 +52,7 @@ jobs:
           fi
       - name: Cancelling this workflow run.
         if: env.public != 'false'
-        uses: actions/github-script@v6
+        uses: actions/github-script@v8
         with:
           script: |
             github.rest.actions.cancelWorkflowRun({
@@ -63,7 +63,7 @@ jobs:
       # Separate wait step to ensure correct reporting on previous step's success or failure
       - name: Waiting for workflow to cancel
         if: env.public != 'false'
-        uses: actions/github-script@v6
+        uses: actions/github-script@v8
         with:
           script: |
             const delay = ms => new Promise(res => setTimeout(res, ms));
