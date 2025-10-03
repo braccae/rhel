@@ -7,6 +7,10 @@ on:
     paths:
       - ".github/workflows/init-blank-image.yml"
 
+permissions:
+  contents: read
+  packages: write
+
 concurrency:
   group: ${{ github.repository }}-global-lock
   cancel-in-progress: false
@@ -81,9 +85,6 @@ jobs:
   build-and-push:
     needs: build-metadata
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
