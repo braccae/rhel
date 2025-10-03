@@ -1,0 +1,13 @@
+## <summary>borgmatic backup client</summary>
+## <desc>
+##	This policy defines a security type for the borgmatic backup client.
+## </desc>
+
+interface(`borgmatic_read_data',`
+	gen_require(`
+		type borgmatic_data_t;
+	')
+
+	allow $1 borgmatic_data_t:dir search_dir_perms;
+	allow $1 borgmatic_data_t:file read_file_perms;
+')

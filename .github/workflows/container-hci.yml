@@ -1,0 +1,283 @@
+name: Build and Publish HCI Container
+
+on:
+  # workflow_run:
+  #   workflows: ["Build and Publish Main Container"]
+  #   types:
+  #     - completed
+  #   branches:
+  #     - main
+  # push:
+  #   branches: ["main"]
+  #   paths:
+  #     - "rootfs/hci/**"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.repository }}-global-lock
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  VARIENT: hci
+  IMAGE_NAME_BASE: "${{ github.event.repository.name }}" # the name of the image produced by this build, matches repo names
+  IMAGE_DESC: "coreos fedora bootc"
+  IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}" # do not edit
+  ARTIFACTHUB_LOGO_URL: "https://avatars.githubusercontent.com/u/23002397?v=4&size=64" # You should put your own image here so that you get a fancy profile image on https://artifacthub.io/!
+
+jobs:
+  cancel-workflow-run-if-public:  # Required permissions for cancelling the workflow run
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Get owner type
+        id: owner_type
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          owner_type=$(gh api repos/${{ github.repository }} --jq .owner.type)
+          echo "type=$(echo $owner_type | tr '[:upper:]' '[:lower:]')s" >> $GITHUB_ENV
+      - name: Check if package exists and is private
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          PACKAGE_NAME: ${{ github.event.repository.name }}
+        run: |
+          response=$(gh api -H "Accept: application/vnd.github+json" "/$type/$OWNER/packages/container/$PACKAGE_NAME" --jq '.visibility' 2>/dev/null || echo "not_found")
+          if [[ "$response" == "public" ]]; then
+            echo "Package '${{ env.PACKAGE_NAME }}'does not exist or is public. Exiting."
+            echo "public=true" >> $GITHUB_ENV
+          else
+            echo "Package '${{ env.PACKAGE_NAME }}'exists and is private. Proceeding."
+            echo "public=false" >> $GITHUB_ENV
+          fi
+      - name: Cancelling this workflow run.
+        if: env.public != 'false'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.actions.cancelWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId
+            });
+      # Separate wait step to ensure correct reporting on previous step's success or failure
+      - name: Waiting for workflow to cancel
+        if: env.public != 'false'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const delay = ms => new Promise(res => setTimeout(res, ms));
+
+            while (true) {
+              core.info('Waiting for workflow to cancel ...');
+              await delay(5000);
+            }
+
+  build-metadata:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      tags: ${{ steps.meta.outputs.tags }}
+      labels: ${{ steps.meta.outputs.labels }}
+    steps:
+      # These stage versions are pinned by https://github.com/renovatebot/renovate
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v4
+
+      # This is optional, but if you see that your builds are way too big for the runners, you can enable this by uncommenting the following lines:
+      # - name: Maximize build space
+      #   uses: ublue-os/remove-unwanted-software@517622d6452028f266b7ba4cc9a123b5f58a6b53 # v7
+      #   with:
+      #     remove-codeql: true
+
+      - name: Get current date
+        id: date
+        run: |
+          # This generates a timestamp like what is defined on the ArtifactHub documentation
+          # E.G: 2022-02-08T15:38:15Z'
+          # https://artifacthub.io/docs/topics/repositories/container-images/
+          # https://linux.die.net/man/1/date
+          echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
+
+      - name: Set Image Name and Tag
+        id: set_image_name
+        run: |
+          BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+          if [[ "$BRANCH_NAME" == "main" ]]; then
+            IMAGE_NAME="${{ env.IMAGE_NAME_BASE }}"
+            TAG=${{ env.VARIENT }}
+          else
+            IMAGE_NAME="${{ env.IMAGE_NAME_BASE }}-${BRANCH_NAME}"
+            TAG="$BRANCH_NAME"
+          fi
+          echo "IMAGE_NAME=$IMAGE_NAME" >> $GITHUB_OUTPUT
+          echo "TAG=$TAG" >> $GITHUB_OUTPUT
+          echo "IMAGE_NAME=$IMAGE_NAME" >> $GITHUB_ENV
+          echo "DEFAULT_TAG=$TAG" >> $GITHUB_ENV
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}
+          tags: |
+            type=raw,value=${{ env.VARIENT }}
+            type=sha,format=short
+            type=ref,event=branch
+            type=ref,event=pr
+          labels: |
+            io.artifacthub.package.readme-url=https://raw.githubusercontent.com/${{ github.repository_owner }}/${{ env.IMAGE_NAME_BASE }}/refs/heads/main/README.md
+            org.opencontainers.image.created=${{ steps.date.outputs.date }}
+            org.opencontainers.image.description=${{ env.IMAGE_DESC }}
+            org.opencontainers.image.documentation=https://raw.githubusercontent.com/${{ github.repository_owner }}/${{ env.IMAGE_NAME_BASE }}/refs/heads/main/README.md
+            org.opencontainers.image.source=https://github.com/${{ github.repository_owner }}/${{ env.IMAGE_NAME_BASE }}/blob/main/Containerfile
+            org.opencontainers.image.title=${{ env.IMAGE_NAME }}
+            org.opencontainers.image.url=https://github.com/${{ github.repository_owner }}/${{ env.IMAGE_NAME_BASE }}
+            org.opencontainers.image.vendor=${{ github.repository_owner }}
+            org.opencontainers.image.version=${{ env.DEFAULT_TAG }}
+            io.artifacthub.package.deprecated=false
+            io.artifacthub.package.keywords=bootc,ublue,universal-blue
+            io.artifacthub.package.license=Apache-2.0
+            io.artifacthub.package.logo-url=${{ env.ARTIFACTHUB_LOGO_URL }}
+            io.artifacthub.package.prerelease=false
+            containers.bootc=1
+          sep-tags: " "
+          sep-annotations: " "
+
+  build:
+    runs-on: ${{ matrix.runner }}
+    needs: build-metadata
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Login to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: redhat-actions/podman-login@v1
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Delete huge unnecessary tools folder
+        run: rm -rf /opt/hostedtoolcache
+
+      - name: Build Image
+        uses: redhat-actions/buildah-build@v2
+        id: build
+        with:
+          context: .
+          containerfiles: ./${{ env.VARIENT }}.Containerfile
+          platforms: ${{ matrix.platform }}
+          image: ${{ env.REGISTRY }}/${{ github.repository }}
+          tags: ${{ needs.build-metadata.outputs.tags }}
+          labels: ${{ needs.build-metadata.outputs.labels }}
+
+      - name: Push To Registry
+        if: github.event_name != 'pull_request'
+        uses: redhat-actions/push-to-registry@v2
+        id: push
+        with:
+          image: ${{ steps.build.outputs.image }}
+          tags: ${{ steps.build.outputs.tags }}
+
+      - name: Upload build info
+        if: github.event_name != 'pull_request'
+        run: |
+          mkdir -p build-info
+          echo "${{ steps.push.outputs.digest }}" > build-info/digest.txt
+          echo "${{ matrix.platform }}" > build-info/platform.txt
+        id: build-info
+
+      - name: Upload artifact for manifest creation
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-info-${{ matrix.arch }}
+          path: build-info/
+
+  create-manifest:
+    runs-on: ubuntu-latest
+    needs: [build-metadata, build]
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Login to GitHub Container Registry
+        uses: redhat-actions/podman-login@v1
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download amd64 build artifacts
+        uses: actions/download-artifact@v5
+        with:
+          name: build-info-amd64
+          path: artifacts/build-info-amd64/
+
+      - name: Download arm64 build artifacts
+        uses: actions/download-artifact@v5
+        with:
+          name: build-info-arm64
+          path: artifacts/build-info-arm64/
+
+      - name: Read build info
+        id: read-build-info
+        run: |
+          AMD64_DIGEST=$(cat artifacts/build-info-amd64/digest.txt)
+          ARM64_DIGEST=$(cat artifacts/build-info-arm64/digest.txt)
+          echo "amd64_digest=$AMD64_DIGEST" >> $GITHUB_OUTPUT
+          echo "arm64_digest=$ARM64_DIGEST" >> $GITHUB_OUTPUT
+
+      - name: Create and push multi-arch manifest
+        id: push-manifest
+        run: |
+          REPOSITORY="${{ env.REGISTRY }}/${{ github.repository }}"
+          for IMAGE_TAG in ${{ needs.build-metadata.outputs.tags }}; do
+            echo "Creating and pushing manifest for $IMAGE_TAG"
+            podman manifest create "$IMAGE_TAG"
+            podman manifest add "$IMAGE_TAG" \
+              --arch amd64 \
+              --os linux \
+              "$REPOSITORY@${{ steps.read-build-info.outputs.amd64_digest }}"
+            podman manifest add "$IMAGE_TAG" \
+              --arch arm64 \
+              --os linux \
+              "$REPOSITORY@${{ steps.read-build-info.outputs.arm64_digest }}"
+            DIGEST=$(podman manifest push "$IMAGE_TAG")
+            TAG="${IMAGE_TAG##*:}"
+            if [[ "$TAG" == "${{ env.VARIENT }}" ]]; then
+              echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+            fi
+          done
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@d7543c93d881b35a8faa02e8e3605f69b7a1ce62 # v3.10.0
+
+      - name: Sign multi-arch manifest
+        run: |
+          REPOSITORY="${{ env.REGISTRY }}/${{ github.repository }}"
+          
+          # Sign the multi-arch manifest using the full reference
+          cosign sign -y --key env://COSIGN_PRIVATE_KEY "${REPOSITORY}:${{ env.VARIENT }}"
+        env:
+          COSIGN_EXPERIMENTAL: false
+          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}

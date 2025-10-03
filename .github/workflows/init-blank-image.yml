@@ -1,0 +1,198 @@
+
+name: Init Blank Scratch Image
+
+on:
+  workflow_dispatch:
+  create:
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/init-blank-image.yml"
+
+concurrency:
+  group: ${{ github.repository }}-global-lock
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.event.repository.name }}
+  IMAGE_DESC: "Blank image based on scratch"
+
+jobs:
+  check-package:
+    runs-on: ubuntu-latest
+    outputs:
+      exists: ${{ steps.check.outputs.exists }}
+    steps:
+      - name: Get owner type
+        id: owner_type
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          owner_type=$(gh api repos/${{ github.repository }} --jq .owner.type)
+          echo "type=$(echo $owner_type | tr '[:upper:]' '[:lower:]')s" >> $GITHUB_OUTPUT
+      - name: Check if package exists and is private
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          PACKAGE_NAME: ${{ github.event.repository.name }}
+        run: |
+          response=$(gh api -H "Accept: application/vnd.github+json" "/${{ steps.owner_type.outputs.type }}/$OWNER/packages/container/$PACKAGE_NAME" --jq '.visibility' 2>/dev/null || echo "not_found")
+          if [[ "$response" == "private" ]]; then
+            echo "Package '${{ env.PACKAGE_NAME }}' exists and is private. Skipping."
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Package '${{ env.PACKAGE_NAME }}' does not exist or is not private. Proceeding."
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+  build-metadata:
+    needs: check-package
+    if: needs.check-package.outputs.exists == 'false' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'create' && github.event.ref_type == 'branch' && github.event.ref == github.event.repository.default_branch))
+    runs-on: ubuntu-latest
+    outputs:
+      tags: ${{ steps.meta.outputs.tags }}
+      labels: ${{ steps.meta.outputs.labels }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get current date
+        id: date
+        run: echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=init
+            type=sha,format=short
+          labels: |
+            org.opencontainers.image.created=${{ steps.date.outputs.date }}
+            org.opencontainers.image.description=${{ env.IMAGE_DESC }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.title=${{ env.IMAGE_NAME }}
+            org.opencontainers.image.url=https://github.com/${{ github.repository }}
+            org.opencontainers.image.vendor=${{ github.repository_owner }}
+
+  build:
+    needs: build-metadata
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: redhat-actions/podman-login@v1
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Image from scratch
+        uses: redhat-actions/buildah-build@v2
+        id: build
+        with:
+          base-image: scratch
+          platforms: ${{ matrix.platform }}
+          image: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
+          tags: ${{ needs.build-metadata.outputs.tags }}
+          labels: ${{ needs.build-metadata.outputs.labels }}
+
+      - name: Push To Registry
+        if: github.event_name != 'pull_request'
+        uses: redhat-actions/push-to-registry@v2
+        id: push
+        with:
+          image: ${{ steps.build.outputs.image }}
+          tags: ${{ steps.build.outputs.tags }}
+
+      - name: Upload build info
+        if: github.event_name != 'pull_request'
+        run: |
+          mkdir -p build-info
+          echo "${{ steps.push.outputs.digest }}" > build-info/digest.txt
+        id: build-info
+
+      - name: Upload artifact for manifest creation
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-info-${{ matrix.arch }}
+          path: build-info/
+
+  create-manifest:
+    needs: [build-metadata, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Login to GitHub Container Registry
+        uses: redhat-actions/podman-login@v1
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download amd64 build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-info-amd64
+          path: artifacts/build-info-amd64/
+
+      - name: Download arm64 build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-info-arm64
+          path: artifacts/build-info-arm64/
+
+      - name: Read build info
+        id: read-build-info
+        run: |
+          AMD64_DIGEST=$(cat artifacts/build-info-amd64/digest.txt)
+          ARM64_DIGEST=$(cat artifacts/build-info-arm64/digest.txt)
+          echo "amd64_digest=$AMD64_DIGEST" >> $GITHUB_OUTPUT
+          echo "arm64_digest=$ARM64_DIGEST" >> $GITHUB_OUTPUT
+
+      - name: Create and push multi-arch manifest
+        id: push-manifest
+        run: |
+          set -euo pipefail
+          REPOSITORY="${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}"
+          AMD64_DIGEST="${{ steps.read-build-info.outputs.amd64_digest }}"
+          ARM64_DIGEST="${{ steps.read-build-info.outputs.arm64_digest }}"
+
+          for tag in ${{ needs.build-metadata.outputs.tags }};
+          do
+            echo "Creating and pushing manifest for image: $tag"
+            podman manifest create "$tag"
+            podman manifest add "$tag" "docker://$REPOSITORY@$AMD64_DIGEST"
+            podman manifest add "$tag" "docker://$REPOSITORY@$ARM64_DIGEST"
+            podman manifest push "$tag"
+          done
+
+      - name: Set package visibility to private
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "Setting visibility of package '${{ env.IMAGE_NAME }}' to private..."
+          gh package visibility "${{ env.IMAGE_NAME }}" --private

@@ -1,0 +1,11 @@
+[Unit]
+Description=Set SELinux to Permissive Mode
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/setenforce Permissive
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

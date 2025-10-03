@@ -1,0 +1,14 @@
+## /usr/lib/systemd/system/bootc-fetch-apply-updates.timer
+[Unit]
+Description=Apply bootc updates
+Documentation=man:bootc(8)
+ConditionPathExists=/run/ostree-booted
+
+[Timer]
+OnBootSec=
+OnCalendar=*-*-* 04:00:00 
+OnUnitInactiveSec=26h
+RandomizedDelaySec=30m
+
+[Install]
+WantedBy=timers.target

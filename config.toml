@@ -1,0 +1,8 @@
+[[customizations.user]]
+name = "core"
+key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBa+WBLGQyn4d/0y0Z2YIB/C7FXO0b7lGveWSAA3A7Zj"
+groups = ["wheel"]
+
+[[customizations.filesystem]]
+mountpoint = "/var"
+minsize = "48 GiB"

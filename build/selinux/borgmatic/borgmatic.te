@@ -1,0 +1,71 @@
+policy_module(borgmatic, 1.0.0)
+
+gen_require(`
+	type var_log_t;
+	type etc_t;
+	type bin_t;
+	type usr_bin_t;
+	type tmp_t;
+	type container_t;
+	type node_t;
+	type port_t;
+')
+
+########################################
+#
+# Declarations
+#
+
+type borgmatic_t;
+type borgmatic_exec_t;
+init_daemon_domain(borgmatic_t, borgmatic_exec_t)
+
+# Type for data shared between borgmatic and containers
+type borgmatic_data_t;
+files_type(borgmatic_data_t)
+
+########################################
+#
+# borgmatic_t local policy
+#
+
+# Allow borgmatic to read and write to its own log files
+allow borgmatic_t var_log_t:file { create getattr open read write append };
+allow borgmatic_t var_log_t:dir { add_name remove_name write search };
+
+# Allow borgmatic to manage processes
+allow borgmatic_t self:process { signal setsched setrlimit getcap setcap };
+allow borgmatic_t self:fd use;
+allow borgmatic_t self:fifo_file { read write getattr open };
+
+# Allow network access
+allow borgmatic_t port_t:tcp_socket name_connect;
+allow borgmatic_t node_t:tcp_socket name_connect;
+
+# Allow borgmatic to read system configuration
+allow borgmatic_t etc_t:dir search;
+allow borgmatic_t etc_t:file { getattr open read };
+
+# Allow borgmatic to execute common binaries
+can_exec(borgmatic_t, bin_t)
+can_exec(borgmatic_t, usr_bin_t)
+
+# Allow borgmatic to access temporary files
+allow borgmatic_t tmp_t:dir { add_name create remove_name search write };
+allow borgmatic_t tmp_t:file { append create getattr open read rename write };
+
+# Allow systemd to transition to the borgmatic domain
+init_daemon_domain(borgmatic_t, borgmatic_exec_t)
+
+########################################
+#
+# Access to borgmatic_data_t
+#
+
+# Allow borgmatic to access its data files
+allow borgmatic_t borgmatic_data_t:dir { add_name create getattr ioctl lock read remove_name rename reparent rmdir search setattr write };
+allow borgmatic_t borgmatic_data_t:file { create getattr ioctl lock open read rename setattr unlink write };
+
+# Allow containers to access borgmatic_data_t
+allow container_t borgmatic_data_t:dir { add_name create getattr ioctl lock read remove_name rename reparent rmdir search setattr write };
+allow container_t borgmatic_data_t:file { create getattr ioctl lock open read rename setattr unlink write };

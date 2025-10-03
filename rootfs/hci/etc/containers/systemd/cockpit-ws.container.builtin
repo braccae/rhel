@@ -1,0 +1,14 @@
+[Container]
+AutoUpdate=registry
+ContainerName=ws
+Environment=NAME=ws
+Exec=/container/label-run
+Image=quay.io/cockpit/ws:latest
+PodmanArgs=--privileged
+Volume=/:/host
+Volume=/etc/cockpit/cockpit.conf:/etc/cockpit/cockpit.conf:ro,Z
+# PublishPort=9090:9090
+Network=host
+
+[Install]
+WantedBy=multi-user.target

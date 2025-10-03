@@ -1,0 +1,14 @@
+
+## Butane and Ignition to prevent any accidental leaks
+*.bu
+!config.bu
+*.ign
+
+## scratch dir for temporary files
+scratch/*
+
+## Cosign Private Key
+cosign.key
+
+# Built images and their manifests
+output/*

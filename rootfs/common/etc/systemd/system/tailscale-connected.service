@@ -1,0 +1,12 @@
+[Unit]
+Description=Tailscale Connectivity Checker
+After=network.target tailscaled.service
+Requires=tailscaled.service
+
+[Service]
+Type=oneshot
+ExecStart=bash /opt/scripts/tailscale-connectivity-check.sh
+TimeoutStartSec=90s
+
+[Install]
+WantedBy=multi-user.target

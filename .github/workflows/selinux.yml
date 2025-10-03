@@ -1,0 +1,35 @@
+name: SELinux Policy
+
+on:
+  push:
+    branches: [ "selinux" ]
+    paths:
+      - 'build/selinux/**'
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - 'build/selinux/**'
+
+jobs:
+  build-selinux-policy:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@v5
+    - name: Install SELinux tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y selinux-policy-dev checkpolicy
+    - name: Build borgmatic policy
+      working-directory: build/selinux/borgmatic
+      run: make -f /usr/share/selinux/devel/Makefile
+    - name: Create directory for policy package
+      run: mkdir -p rootfs/common/usr/share/selinux/packages
+    - name: Move policy package
+      run: mv build/selinux/borgmatic/borgmatic.pp rootfs/common/usr/share/selinux/packages/borgmatic.pp
+    - name: Commit changes
+      uses: stefanzweifel/git-auto-commit-action@v6
+      with:
+        commit_message: "feat(selinux): build and add borgmatic policy"
+        file_pattern: "rootfs/common/usr/share/selinux/packages/borgmatic.pp"

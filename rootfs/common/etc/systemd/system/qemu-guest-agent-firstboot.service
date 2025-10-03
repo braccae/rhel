@@ -1,0 +1,15 @@
+[Unit]
+Description=Enable QEMU Guest Agent on first boot in VM
+DefaultDependencies=no
+Before=sysinit.target
+ConditionPathExists=!/var/lib/qemu-guest-agent-firstboot-done
+After=systemd-sysusers.service
+Requires=systemd-sysusers.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/setup/qemu-guest-agent-firstboot.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=sysinit.target

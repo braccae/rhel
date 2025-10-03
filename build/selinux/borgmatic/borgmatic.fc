@@ -1,0 +1,5 @@
+/usr/bin/borgmatic		--	gen_context(system_u:object_r:borgmatic_exec_t,s0)
+/usr/bin/borg			--	gen_context(system_u:object_r:usr_bin_t,s0)
+
+# Shared data directory
+/var/lib/borgmatic/repos(/.*)?	gen_context(system_u:object_r:borgmatic_data_t,s0)
