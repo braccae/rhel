@@ -63,7 +63,7 @@ ARG GHCR_USERNAME=braccae
 # Copy ZFS packages and MOK key from builder
 RUN mkdir -p /tmp/zfs-rpms
 COPY --from=zfs-builder /tmp/ /tmp/zfs-source/
-RUN find /tmp/zfs-source -name "*.rpm" -exec cp {} /tmp/zfs-rpms/ \;
+RUN find /tmp/zfs-source -name "*.rpm" ! -name "*.src.rpm" ! -name "*debuginfo*" ! -name "*debugsource*" -exec cp {} /tmp/zfs-rpms/ \;
 COPY --from=zfs-builder /etc/pki/mok/ /etc/pki/mok/
 
 RUN --mount=type=secret,id=GHCR_PULL_TOKEN \
