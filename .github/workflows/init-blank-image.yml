@@ -99,6 +99,8 @@ jobs:
           tags: ${{ needs.build-metadata.outputs.tags }}
           labels: ${{ needs.build-metadata.outputs.labels }}
           arch: amd64
+          content: |
+            README.md
 
       - name: Push to GitHub Container Registry
         uses: redhat-actions/push-to-registry@v2
