@@ -76,9 +76,7 @@ jobs:
             org.opencontainers.image.url=https://github.com/${{ github.repository }}
             org.opencontainers.image.vendor=${{ github.repository_owner }}
 
-      - name: Sanitize tags
-        id: sanitized-tags
-        run: echo "tags=$(echo '${{ steps.meta.outputs.tags }}' | tr '\n' ' ' | sed 's/ $//')" >> $GITHUB_OUTPUT
+
 
   build-and-push:
     needs: build-metadata
@@ -113,7 +111,7 @@ jobs:
           context: .
           file: ./Dockerfile.temp
           push: true
-          tags: ${{ needs.build-metadata.outputs.tags }}
+          tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ needs.build-metadata.outputs.labels }}
           platforms: linux/amd64
 
