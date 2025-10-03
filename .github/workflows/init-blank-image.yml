@@ -82,7 +82,7 @@ jobs:
 
   build-and-push:
     needs: build-metadata
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
@@ -90,26 +90,32 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build image
-        uses: redhat-actions/buildah-build@v2
-        id: build
-        with:
-          base-image: scratch
-          image: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
-          tags: ${{ needs.build-metadata.outputs.tags }}
-          labels: ${{ needs.build-metadata.outputs.labels }}
-          arch: amd64
-          content: |
-            README.md
+      - name: Create ephemeral Dockerfile
+        run: |
+          cat > Dockerfile.temp << 'EOF'
+          FROM scratch
+          COPY README.md /
+          EOF
 
-      - name: Push to GitHub Container Registry
-        uses: redhat-actions/push-to-registry@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
         with:
-          tags: ${{ steps.build.outputs.tags }}
-          image: ${{ env.IMAGE_NAME }}
-          registry: ${{ env.REGISTRY }}
+          registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.temp
+          push: true
+          tags: ${{ needs.build-metadata.outputs.tags }}
+          labels: ${{ needs.build-metadata.outputs.labels }}
+          platforms: linux/amd64
 
       - name: Set package visibility to private
         if: github.event_name != 'pull_request'
