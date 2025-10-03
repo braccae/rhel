@@ -92,10 +92,9 @@ RUN --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/p
     && dnf clean all
 
 # Copy ZFS packages and MOK key from builder
-RUN ZFS_VERSION=$(curl -s https://api.github.com/repos/openzfs/zfs/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/') \
-    && mkdir -p /tmp/zfs-rpms \
-    && find /tmp/$ZFS_VERSION -name "*.$(uname -m).rpm" -exec cp {} /tmp/zfs-rpms/ \; \
-    && find /tmp/$ZFS_VERSION -name "*.noarch.rpm" -exec cp {} /tmp/zfs-rpms/ \;
+RUN mkdir -p /tmp/zfs-rpms
+COPY --from=zfs-builder /tmp/ /tmp/zfs-source/
+RUN find /tmp/zfs-source -name "*.rpm" -exec cp {} /tmp/zfs-rpms/ \;
 COPY --from=zfs-builder /etc/pki/mok/ /etc/pki/mok/
 
 # Install ZFS packages
