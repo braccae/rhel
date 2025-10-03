@@ -6,6 +6,10 @@ on:
     workflows: ["Init Blank Scratch Image"]
     types:
       - completed
+  push:
+    branches: ["main"]
+    paths:
+      - "repos.Containerfile"
   # schedule:
   #   - cron: "0 0 1/14 * *"
 
