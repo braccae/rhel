@@ -112,7 +112,7 @@ jobs:
         with:
           base-image: scratch
           image: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
-          tags: ${{ needs.build-metadata.outputs.tags }}
+          tags: ${{ github.run_id }}-${{ matrix.arch }}
           labels: ${{ needs.build-metadata.outputs.labels }}
 
       - name: Push To Registry
