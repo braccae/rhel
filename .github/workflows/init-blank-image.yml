@@ -2,7 +2,6 @@ name: Init Blank Scratch Image
 
 on:
   workflow_dispatch:
-  create:
   push:
     branches: ["main"]
     paths:
@@ -95,15 +94,20 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push image
+      - name: Build image
         uses: redhat-actions/buildah-build@v2
-        id: build-and-push
+        id: build
         with:
           base-image: scratch
           image: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
           tags: ${{ needs.build-metadata.outputs.tags }}
           labels: ${{ needs.build-metadata.outputs.labels }}
           arch: amd64
+
+      - name: Push to GitHub Container Registry
+        uses: redhat-actions/push-to-registry@v2
+        with:
+          tags: ${{ steps.build.outputs.tags }}
 
       - name: Set package visibility to private
         if: github.event_name != 'pull_request'
@@ -113,8 +117,23 @@ jobs:
           set -euo pipefail
           echo "Setting visibility of package '${{ env.IMAGE_NAME }}' to private..."
           owner_type=$(gh api repos/${{ github.repository }} --jq .owner.type | tr '[:upper:]' '[:lower:]')s
-          gh api \
-            --method PATCH \
-            -H "Accept: application/vnd.github+json" \
-            "/${owner_type}/${{ github.repository_owner }}/packages/container/${{ env.IMAGE_NAME }}" \
-            -f visibility='private' 
+          ATTEMPTS=5
+          DELAY=5
+          for i in $(seq 1 $ATTEMPTS); do
+            echo "Attempting to set package visibility (attempt $i)..."
+            if gh api \
+              --method PATCH \
+              -H "Accept: application/vnd.github+json" \
+              "/${owner_type}/${{ github.repository_owner }}/packages/container/${{ env.IMAGE_NAME }}" \
+              -f visibility='private'; then
+              echo "Package visibility successfully set to private."
+              exit 0
+            fi
+            if [ "$i" -lt "$ATTEMPTS" ]; then
+              echo "Attempt $i failed. Retrying in $DELAY seconds..."
+              sleep $DELAY
+            else
+              echo "Final attempt failed. Unable to set package visibility."
+              exit 1
+            fi
+          done 
