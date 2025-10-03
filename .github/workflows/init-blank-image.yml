@@ -1,4 +1,3 @@
-
 name: Init Blank Scratch Image
 
 on:
@@ -78,22 +77,12 @@ jobs:
             org.opencontainers.image.url=https://github.com/${{ github.repository }}
             org.opencontainers.image.vendor=${{ github.repository_owner }}
 
-  build:
+  build-and-push:
     needs: build-metadata
-    runs-on: ${{ matrix.runner }}
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: amd64
-            platform: linux/amd64
-            runner: ubuntu-24.04
-          - arch: arm64
-            platform: linux/arm64
-            runner: ubuntu-24.04-arm
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -106,90 +95,18 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build Image from scratch
+      - name: Build and push image
         uses: redhat-actions/buildah-build@v2
-        id: build
+        id: build-and-push
         with:
           base-image: scratch
-          image: ${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
-          tags: ${{ github.run_id }}-${{ matrix.arch }}
+          image: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
+          tags: ${{ needs.build-metadata.outputs.tags }}
           labels: ${{ needs.build-metadata.outputs.labels }}
-
-      - name: Push To Registry
-        if: github.event_name != 'pull_request'
-        uses: redhat-actions/push-to-registry@v2
-        id: push
-        with:
-          image: ${{ steps.build.outputs.image }}
-          tags: ${{ steps.build.outputs.tags }}
-          registry: ${{ env.REGISTRY }}
-
-      - name: Upload build info
-        if: github.event_name != 'pull_request'
-        run: |
-          mkdir -p build-info
-          echo "${{ steps.push.outputs.digest }}" > build-info/digest.txt
-        id: build-info
-
-      - name: Upload artifact for manifest creation
-        if: github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-info-${{ matrix.arch }}
-          path: build-info/
-
-  create-manifest:
-    needs: [build-metadata, build]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - name: Login to GitHub Container Registry
-        uses: redhat-actions/podman-login@v1
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Download amd64 build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: build-info-amd64
-          path: artifacts/build-info-amd64/
-
-      - name: Download arm64 build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: build-info-arm64
-          path: artifacts/build-info-arm64/
-
-      - name: Read build info
-        id: read-build-info
-        run: |
-          AMD64_DIGEST=$(cat artifacts/build-info-amd64/digest.txt)
-          ARM64_DIGEST=$(cat artifacts/build-info-arm64/digest.txt)
-          echo "amd64_digest=$AMD64_DIGEST" >> $GITHUB_OUTPUT
-          echo "arm64_digest=$ARM64_DIGEST" >> $GITHUB_OUTPUT
-
-      - name: Create and push multi-arch manifest
-        id: push-manifest
-        run: |
-          set -euo pipefail
-          REPOSITORY="${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}"
-          AMD64_DIGEST="${{ steps.read-build-info.outputs.amd64_digest }}"
-          ARM64_DIGEST="${{ steps.read-build-info.outputs.arm64_digest }}"
-
-          for tag in ${{ needs.build-metadata.outputs.tags }};
-          do
-            echo "Creating and pushing manifest for image: $tag"
-            podman manifest create "$tag"
-            podman manifest add "$tag" "docker://$REPOSITORY@$AMD64_DIGEST"
-            podman manifest add "$tag" "docker://$REPOSITORY@$ARM64_DIGEST"
-            podman manifest push "$tag"
-          done
+          arch: amd64
 
       - name: Set package visibility to private
+        if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
