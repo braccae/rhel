@@ -111,7 +111,6 @@ jobs:
         id: build
         with:
           base-image: scratch
-          platforms: ${{ matrix.platform }}
           image: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
           tags: ${{ needs.build-metadata.outputs.tags }}
           labels: ${{ needs.build-metadata.outputs.labels }}
