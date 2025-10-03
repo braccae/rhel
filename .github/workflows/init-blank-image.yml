@@ -122,6 +122,7 @@ jobs:
         with:
           image: ${{ steps.build.outputs.image }}
           tags: ${{ steps.build.outputs.tags }}
+          registry: ${{ env.REGISTRY }}
 
       - name: Upload build info
         if: github.event_name != 'pull_request'
