@@ -4,7 +4,6 @@ FROM base AS zfs-builder
 
 ARG ENTITLEMENT_IMAGE=ghcr.io/braccae/rhel
 ARG ENTITLEMENT_TAG=repos
-ARG GHCR_USERNAME=braccae
 
 # Set up entitlements for build stage
 
@@ -12,8 +11,7 @@ RUN --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/p
     --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/rhsm,target=/etc/rhsm \
     --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/yum.repos.d,target=/etc/yum.repos.d \
     --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/pki/rpm-gpg,target=/etc/pki/rpm-gpg \
-    dnf config-manager --set-enabled crb \
-    && dnf install -y --skip-broken \
+    dnf install -y --skip-broken \
        epel-release \
        gcc make autoconf automake libtool rpm-build kernel-rpm-macros \
        libtirpc-devel libblkid-devel libuuid-devel libudev-devel \
