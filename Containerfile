@@ -33,7 +33,8 @@ RUN mkdir -p /etc/pki/mok \
 # Download and build ZFS
 RUN cd /tmp \
     && ZFS_VERSION=$(curl -s https://api.github.com/repos/openzfs/zfs/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/') \
-    && echo "Building ZFS version: $ZFS_VERSION" \
+    && BOOTC_KERNEL_VERSION=$(ls /usr/lib/modules/ | head -1) \
+    && echo "Building ZFS version: $ZFS_VERSION for bootc kernel: $BOOTC_KERNEL_VERSION" \
     && wget https://github.com/openzfs/zfs/releases/download/$ZFS_VERSION/$ZFS_VERSION.tar.gz \
     && tar -xzf $ZFS_VERSION.tar.gz \
     && cd $ZFS_VERSION \
@@ -42,8 +43,9 @@ RUN cd /tmp \
 
 # Sign the kernel modules
 RUN ZFS_VERSION=$(curl -s https://api.github.com/repos/openzfs/zfs/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/') \
+    && BOOTC_KERNEL_VERSION=$(ls /usr/lib/modules/ | head -1) \
     && for module in $(find /tmp/$ZFS_VERSION -name "*.ko"); do \
-        /usr/src/kernels/$(uname -r)/scripts/sign-file \
+        /usr/src/kernels/$BOOTC_KERNEL_VERSION/scripts/sign-file \
         sha256 \
         /etc/pki/mok/LOCALMOK.priv \
         /etc/pki/mok/LOCALMOK.der \
