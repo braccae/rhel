@@ -22,14 +22,13 @@ RUN EPEL_URL="https://dl.fedoraproject.org/pub/epel/epel-release-latest-$(rpm -E
     && dnf install -y --nogpgcheck \
     $EPEL_URL $RPMFUSION_FREE_URL $RPMFUSION_NONFREE_URL
 
-RUN ZFS_RPM="zfs-release-2-8$(rpm --eval "%{dist}").noarch.rpm" \
-    && wget https://zfsonlinux.org/epel/$ZFS_RPM \
-    && dnf install -y ${ZFS_RPM} \
-    && dnf config-manager --disable zfs \
-    && dnf config-manager --enable zfs-kmod
+# RUN ZFS_RPM="zfs-release-2-8$(rpm --eval "%{dist}").noarch.rpm" \
+#     && wget https://zfsonlinux.org/epel/$ZFS_RPM \
+#     && dnf install -y ${ZFS_RPM} \
+#     && dnf config-manager --disable zfs \
+#     && dnf config-manager --enable zfs-kmod
 
-RUN ZFS_RPM="zfs-release-2-8$(rpm --eval "%{dist}").noarch.rpm" \
-    mkdir -p /rhel_entitlement/etc-pki-entitlement \
+RUN mkdir -p /rhel_entitlement/etc-pki-entitlement \
     && mkdir -p /rhel_entitlement/etc-rhsm \
     && mkdir -p /rhel_entitlement/etc-yum.repos.d/redhat \
     && mkdir -p /rhel_entitlement/etc-yum.repos.d/external \
