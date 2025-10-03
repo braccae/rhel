@@ -12,7 +12,6 @@ RUN --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/p
     --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/yum.repos.d,target=/etc/yum.repos.d \
     --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/pki/rpm-gpg,target=/etc/pki/rpm-gpg \
     dnf install -y --skip-broken \
-       epel-release \
        gcc make autoconf automake libtool rpm-build kernel-rpm-macros \
        libtirpc-devel libblkid-devel libuuid-devel libudev-devel \
        openssl-devel zlib-devel libaio-devel libattr-devel \
