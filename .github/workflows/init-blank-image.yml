@@ -123,6 +123,7 @@ jobs:
         run: |
           set -euo pipefail
           echo "Setting visibility of package '${{ env.IMAGE_NAME }}' to private..."
+          sleep 30
           ATTEMPTS=5
           DELAY=5
           for i in $(seq 1 $ATTEMPTS); do
