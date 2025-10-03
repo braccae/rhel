@@ -112,4 +112,9 @@ jobs:
         run: |
           set -euo pipefail
           echo "Setting visibility of package '${{ env.IMAGE_NAME }}' to private..."
-          gh package visibility "${{ env.IMAGE_NAME }}" --private
+          owner_type=$(gh api repos/${{ github.repository }} --jq .owner.type | tr '[:upper:]' '[:lower:]')s
+          gh api \
+            --method PATCH \
+            -H "Accept: application/vnd.github+json" \
+            "/${owner_type}/${{ github.repository_owner }}/packages/container/${{ env.IMAGE_NAME }}" \
+            -f visibility='private' 
