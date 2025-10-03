@@ -60,6 +60,12 @@ ARG ENTITLEMENT_IMAGE=ghcr.io/braccae/rhel
 ARG ENTITLEMENT_TAG=repos
 ARG GHCR_USERNAME=braccae
 
+# Copy ZFS packages and MOK key from builder
+RUN mkdir -p /tmp/zfs-rpms
+COPY --from=zfs-builder /tmp/ /tmp/zfs-source/
+RUN find /tmp/zfs-source -name "*.rpm" -exec cp {} /tmp/zfs-rpms/ \;
+COPY --from=zfs-builder /etc/pki/mok/ /etc/pki/mok/
+
 RUN --mount=type=secret,id=GHCR_PULL_TOKEN \
        export GHCR_AUTH_B64=$(echo -n "${GHCR_USERNAME}:$(cat /run/secrets/GHCR_PULL_TOKEN)" | base64 -w 0) \
     && mkdir -p /etc/ostree \
@@ -71,35 +77,27 @@ RUN --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/p
     --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/yum.repos.d,target=/etc/yum.repos.d \
     --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/pki/rpm-gpg,target=/etc/pki/rpm-gpg \
     dnf install -y \
-       borgbackup \
-       qemu-guest-agent \
-       tailscale \
-       firewalld \
-       sqlite \
-       fuse \
-       rclone \
-       rsync \
-       cockpit-system \
-       cockpit-bridge \
-       cockpit-networkmanager \
-       cockpit-podman \
-       cockpit-ostree \
-       cockpit-selinux \
-       cockpit-storaged \
-       cockpit-files \
-       python3-psycopg2 \
-       python3-pip \
+    borgbackup \
+    qemu-guest-agent \
+    tailscale \
+    firewalld \
+    sqlite \
+    fuse \
+    rclone \
+    rsync \
+    cockpit-system \
+    cockpit-bridge \
+    cockpit-networkmanager \
+    cockpit-podman \
+    cockpit-ostree \
+    cockpit-selinux \
+    cockpit-storaged \
+    cockpit-files \
+    python3-psycopg2 \
+    python3-pip \
+    && dnf install -y /tmp/zfs-rpms/*.rpm \
+    && rm -rf /tmp/zfs-rpms \
     && dnf clean all
-
-# Copy ZFS packages and MOK key from builder
-RUN mkdir -p /tmp/zfs-rpms
-COPY --from=zfs-builder /tmp/ /tmp/zfs-source/
-RUN find /tmp/zfs-source -name "*.rpm" -exec cp {} /tmp/zfs-rpms/ \;
-COPY --from=zfs-builder /etc/pki/mok/ /etc/pki/mok/
-
-# Install ZFS packages
-RUN dnf install -y /tmp/zfs-rpms/*.rpm \
-    && rm -rf /tmp/zfs-rpms
 
 COPY rootfs/common/ /
 
