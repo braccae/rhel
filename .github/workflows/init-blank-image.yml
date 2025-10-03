@@ -80,8 +80,6 @@ jobs:
             org.opencontainers.image.url=https://github.com/${{ github.repository }}
             org.opencontainers.image.vendor=${{ github.repository_owner }}
 
-
-
   build-and-push:
     needs: build-metadata
     runs-on: ubuntu-latest
@@ -115,38 +113,3 @@ jobs:
           tags: ${{ needs.build-metadata.outputs.tags }}
           labels: ${{ needs.build-metadata.outputs.labels }}
           platforms: linux/amd64
-
-      - name: Get package info
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh api "/users/${{ github.repository_owner }}/packages/container/${{ env.IMAGE_NAME }}"
-
-      - name: Set package visibility to private
-        if: github.event_name != 'pull_request'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          echo "Setting visibility of package '${{ env.IMAGE_NAME }}' to private..."
-          sleep 30
-          ATTEMPTS=5
-          DELAY=5
-          for i in $(seq 1 $ATTEMPTS); do
-            echo "Attempting to set package visibility (attempt $i)..."
-            if gh api \
-              --method PATCH \
-              -H "Accept: application/vnd.github+json" \
-              "/users/${{ github.repository_owner }}/packages/container/${{ env.IMAGE_NAME }}" \
-              -f visibility='private'; then
-              echo "Package visibility successfully set to private."
-              exit 0
-            fi
-            if [ "$i" -lt "$ATTEMPTS" ]; then
-              echo "Attempt $i failed. Retrying in $DELAY seconds..."
-              sleep $DELAY
-            else
-              echo "Final attempt failed. Unable to set package visibility."
-              exit 1
-            fi
-          done 
