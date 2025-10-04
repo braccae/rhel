@@ -4,5 +4,5 @@ key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBa+WBLGQyn4d/0y0Z2YIB/C7FXO0b7lGveWS
 groups = ["wheel"]
 
 [[customizations.filesystem]]
-mountpoint = "/var"
+mountpoint = "/"
 minsize = "48 GiB"

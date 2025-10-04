@@ -3,28 +3,7 @@
 # ==============================================================================
 set shell := ["bash", "-c"]
 
-# This recipe ensures that the command is run with root privileges.
-# It automatically re-runs `just` with `run0` or `sudo` if not already root.
-# It is intended to be used as a dependency for recipes that need elevation.
-[private]
-_escalate:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    # If we are not root, re-run the whole `just` command with elevation.
-    if [[ $EUID -ne 0 ]]; then
-        echo "This task requires root privileges. Attempting to escalate..."
-        # Export current user's UID/GID so child processes can use them for chown
-        export CALLING_UID=$(id -u)
-        export CALLING_GID=$(id -g)
-        if command -v run0 &> /dev/null; then
-            exec run0 just "$@"
-        elif command -v sudo &> /dev/null; then
-            exec sudo just "$@"
-        else
-            echo "Error: Cannot escalate privileges. Please run with 'sudo' or 'run0'." >&2
-            exit 1
-        fi
-    fi
+
 
 # ==============================================================================
 # MOK Key Management
@@ -74,9 +53,12 @@ regen-mok:
 
 # Builds a qcow2 disk image from a container image.
 # Usage: just build-disk-image <output_dir> <image_tag>
-build-disk-image output_dir image_tag: _escalate
-    podman pull ghcr.io/braccae/coreos:{{image_tag}}
-    podman run \
+build-disk-image image_tag='latest':
+    #!/bin/bash
+    set -euo pipefail
+    sudo podman pull ghcr.io/braccae/rhel:{{image_tag}}
+    sudo mkdir -p ./output/{{image_tag}}
+    sudo podman run \
         --rm \
         -it \
         --privileged \
@@ -88,9 +70,9 @@ build-disk-image output_dir image_tag: _escalate
         quay.io/centos-bootc/bootc-image-builder:latest \
         --type qcow2 \
         --use-librepo=True \
-        --rootfs btrfs \
-        ghcr.io/braccae/coreos:{{image_tag}}
-    chown -fR ${SUDO_UID:-${CALLING_UID:-$(id -u)}}:${SUDO_GID:-${CALLING_GID:-$(id -g)}} ./output
+        --rootfs xfs \
+        ghcr.io/braccae/rhel:{{image_tag}}
+    sudo chown -fR ${SUDO_UID:-${CALLING_UID:-$(id -u)}}:${SUDO_GID:-${CALLING_GID:-$(id -g)}} ./output
 
 
 # ==============================================================================
@@ -101,16 +83,16 @@ build-disk-image output_dir image_tag: _escalate
 # DANGER: This will overwrite the destination disk. Use with extreme caution.
 # Usage: just write-disk-image <image_file> <disk_device>
 # Example: just write-disk-image build/qcow2/disk.qcow2 /dev/sdX
-write-disk-image image_file disk: _escalate
+write-disk-image image_file disk:
     #!/bin/bash
     set -euo pipefail
     echo "DANGER: This will overwrite all data on {{disk}}".
     echo "You have 5 seconds to press Ctrl+C to cancel."
     sleep 5
     echo "Writing {{image_file}} to {{disk}}..."
-    qemu-img convert -O raw -p {{image_file}} {{disk}}
-    sync -f {{disk}}
-    sync {{disk}}
+    sudo qemu-img convert -O raw -p {{image_file}} {{disk}}
+    sudo sync -f {{disk}}
+    sudo sync {{disk}}
     echo "Write complete."
 
 
@@ -121,8 +103,8 @@ write-disk-image image_file disk: _escalate
 # Default variables for the test VM
 _VM_MEMORY        := "2048"
 _VM_VCPUS         := "2"
-_VM_REMOTE_IMAGE  := "ghcr.io/braccae/coreos:centos"
-_VM_LOCAL_TAG     := "localhost/coreos-test:latest"
+_VM_REMOTE_IMAGE  := "ghcr.io/braccae/rhel:centos"
+_VM_LOCAL_TAG     := "localhost/rhel-test:latest"
 _VM_BUILD_DIR     := "output/test-vm"
 _VM_DISK_IMAGE    := _VM_BUILD_DIR + "/qcow2/disk.qcow2"
 
@@ -141,38 +123,23 @@ check-vm-deps:
 
 # [private] Builds the bootable qcow2 disk image for the test VM.
 # This is a helper recipe for the `test-vm` target.
-_vm-build-disk containerfile='':
+_vm-build-disk image_tag='latest':
     #!/bin/bash
     set -euo pipefail
-    if [[ -n '{{containerfile}}' ]]; then
-        echo "--- Building local container image from {{containerfile}} ---"
-        podman build --file '{{containerfile}}' --tag '{{_VM_LOCAL_TAG}}' "$(dirname '{{containerfile}}')"
-        IMAGE_TO_USE='{{_VM_LOCAL_TAG}}'
-    else
-        echo "--- Using remote image: {{_VM_REMOTE_IMAGE}} ---"
-        podman pull '{{_VM_REMOTE_IMAGE}}'
-        IMAGE_TO_USE='{{_VM_REMOTE_IMAGE}}'
-    fi
-
-    echo "--- Building bootc disk image (rootfs: xfs) ---"
-    mkdir -p '{{_VM_BUILD_DIR}}'
-
-    podman run \
-        --rm -it --privileged --pull=newer --security-opt label=type:unconfined_t \
-        -v ./config.toml:/config.toml:ro \
-        -v {{_VM_BUILD_DIR}}:/output \
-        -v /var/lib/containers/storage:/var/lib/containers/storage \
-        quay.io/centos-bootc/bootc-image-builder:latest \
-        --type qcow2 --use-librepo=True --rootfs xfs \
-        "$IMAGE_TO_USE"
+    echo "--- Building disk image for test VM using tag: {{image_tag}} ---"
+    just build-disk-image {{image_tag}}
+    
+    # Move the built image to the expected test VM location
+    sudo mkdir -p "$(dirname '{{_VM_DISK_IMAGE}}')"
+    sudo mv "./output/{{image_tag}}/qcow2/disk.qcow2" "{{_VM_DISK_IMAGE}}"
 
 # Build and run an ephemeral test VM.
 # The VM is automatically destroyed and cleaned up on exit.
-# Usage: just test-vm [containerfile] [memory=2048] [vcpus=2]
-# Example (remote image): just test-vm
-# Example (local image):  just test-vm Containerfile
-# Example (more resources): just test-vm '' 4096 4
-test-vm containerfile='' memory=_VM_MEMORY vcpus=_VM_VCPUS: _escalate check-vm-deps ( _vm-build-disk containerfile )
+# Usage: just test-vm [image_tag] [memory=2048] [vcpus=2]
+# Example (latest tag): just test-vm
+# Example (specific tag): just test-vm centos
+# Example (more resources): just test-vm latest 4096 4
+test-vm image_tag='latest' memory=_VM_MEMORY vcpus=_VM_VCPUS: check-vm-deps ( _vm-build-disk image_tag )
     #!/bin/bash
     set -euo pipefail
 
@@ -187,9 +154,9 @@ test-vm containerfile='' memory=_VM_MEMORY vcpus=_VM_VCPUS: _escalate check-vm-d
     cleanup() {
         echo "--- Cleaning up VM: $VM_NAME ---"
         # Check if VM exists before trying to destroy/undefine
-        if virsh list --all --name | grep -q "^${VM_NAME}$"; then
-            virsh destroy "$VM_NAME" &>/dev/null || true
-            virsh undefine "$VM_NAME" --remove-all-storage &>/dev/null || true
+        if sudo virsh list --all --name | grep -q "^${VM_NAME}$"; then
+            sudo virsh destroy "$VM_NAME" &>/dev/null || true
+            sudo virsh undefine "$VM_NAME" --remove-all-storage &>/dev/null || true
             echo "VM destroyed and undefined."
         else
             echo "VM not found, skipping cleanup."
@@ -199,12 +166,12 @@ test-vm containerfile='' memory=_VM_MEMORY vcpus=_VM_VCPUS: _escalate check-vm-d
 
     echo "--- Preparing ephemeral VM image ---"
     # Move the built disk image to the libvirt images directory
-    mv "{{_VM_DISK_IMAGE}}" "$EPHEMERAL_IMAGE"
+    sudo mv "{{_VM_DISK_IMAGE}}" "$EPHEMERAL_IMAGE"
     # The build dir might be left over, remove it.
-    rm -rf "$(dirname '{{_VM_DISK_IMAGE}}')"
+    sudo rm -rf "$(dirname '{{_VM_DISK_IMAGE}}')"
 
     echo "--- Creating and starting VM: $VM_NAME ---"
-    virt-install \
+    sudo virt-install \
         --name "$VM_NAME" \
         --memory "{{memory}}" \
         --vcpus "{{vcpus}}" \
@@ -218,12 +185,13 @@ test-vm containerfile='' memory=_VM_MEMORY vcpus=_VM_VCPUS: _escalate check-vm-d
         --boot uefi
 
     echo "--- Waiting for VM to start... ---"
-    sleep 5 # Simple wait, can be improved with a loop
+    sleep infinity # Simple wait, can be improved with a loop
 
-    VNC_DISPLAY=$(virsh vncdisplay "$VM_NAME" 2>/dev/null || echo "Not available")
+    VNC_DISPLAY=$(sudo virsh vncdisplay "$VM_NAME" 2>/dev/null || echo "Not available")
     echo ""
     echo "================ VM Information ================"
     echo "VM Name:      $VM_NAME"
     echo "VNC Display:  $VNC_DISPLAY (Connect with: vncviewer localhost${VNC_DISPLAY})"
-    echo "Console:      virsh console $VM_NAME"
-    echo "================================================
+    echo "Console:      run0 virsh console $VM_NAME"
+    echo "================================================"
+    exit

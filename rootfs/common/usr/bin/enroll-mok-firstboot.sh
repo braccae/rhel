@@ -94,6 +94,7 @@ else
     if [[ "$SECURE_BOOT_ENABLED" == "true" ]]; then
         print_warning "MOK key is not yet enrolled"
         echo "Please follow the enrollment instructions above."
+        echo 'zfs' | mokutil --import /etc/pki/mok/LOCALMOK.der
     fi
 fi
 
