@@ -146,16 +146,24 @@ for module in "${MODULES[@]}"; do
     module_name=$(basename "$module")
     log "Signing: ${module_name}"
     
+    # Check if module exists before signing
+    if [ ! -f "$module" ]; then
+        log "✗ Module not found: ${module}"
+        exit 1
+    fi
+    
+    # Sign the module with error handling
     if "${KERNEL_SOURCE_DIR}/scripts/sign-file" \
         sha256 \
         /run/secrets/LOCALMOK \
         /etc/pki/mok/LOCALMOK.der \
-        "$module"; then
+        "$module" 2>&1; then
         
         log "✓ Successfully signed: ${module_name}"
         ((SIGNED_COUNT++))
     else
-        log "✗ Failed to sign: ${module_name}"
+        sign_exit_code=$?
+        log "✗ Failed to sign: ${module_name} (exit code: ${sign_exit_code})"
         exit 1
     fi
 done
