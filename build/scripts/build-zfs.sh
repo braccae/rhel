@@ -34,9 +34,19 @@ fi
 KERNEL_SOURCE_DIR=$(find /usr/src/kernels/ -maxdepth 1 -type d ! -path "/usr/src/kernels/" | head -1)
 if [ -z "$KERNEL_SOURCE_DIR" ]; then
     log "ERROR: No kernel source directory found in /usr/src/kernels/"
+    log "Available directories in /usr/src/kernels/:"
+    ls -la /usr/src/kernels/ || log "Directory /usr/src/kernels/ does not exist"
     exit 1
 fi
 log "KERNEL_SOURCE_DIR: ${KERNEL_SOURCE_DIR}"
+
+# Verify sign-file script exists
+if [ ! -f "${KERNEL_SOURCE_DIR}/scripts/sign-file" ]; then
+    log "ERROR: sign-file script not found at ${KERNEL_SOURCE_DIR}/scripts/sign-file"
+    log "Available scripts in ${KERNEL_SOURCE_DIR}/scripts/:"
+    ls -la "${KERNEL_SOURCE_DIR}/scripts/" || log "Scripts directory does not exist"
+    exit 1
+fi
 
 # Step 1: Install build dependencies
 log "Installing build dependencies..."
@@ -48,6 +58,14 @@ dnf install -y --skip-broken \
    python3 python3-devel python3-setuptools python3-cffi \
    libffi-devel python3-packaging dkms \
    git wget ncompress curl
+
+# Install kernel headers for the specific kernel version
+log "Installing kernel headers for ${BOOTC_KERNEL_VERSION}..."
+dnf install -y "kernel-devel-${BOOTC_KERNEL_VERSION}" || {
+    log "WARNING: Could not install kernel-devel-${BOOTC_KERNEL_VERSION}"
+    log "Trying to install latest kernel-devel..."
+    dnf install -y kernel-devel
+}
 
 log "✓ Build dependencies installed successfully"
 
