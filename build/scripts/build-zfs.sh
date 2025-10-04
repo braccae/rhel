@@ -21,8 +21,22 @@ log "ENTITLEMENT_IMAGE: ${ENTITLEMENT_IMAGE}"
 log "ENTITLEMENT_TAG: ${ENTITLEMENT_TAG}"
 
 # Get bootc kernel version
-BOOTC_KERNEL_VERSION=$(find /usr/lib/modules/ -maxdepth 1 -type d -printf "%f\n" | head -1)
+BOOTC_KERNEL_VERSION=$(find /usr/lib/modules/ -maxdepth 1 -type d ! -path "/usr/lib/modules/" -printf "%f\n" | head -1)
 log "BOOTC_KERNEL_VERSION: ${BOOTC_KERNEL_VERSION}"
+
+# Verify kernel directories exist
+if [ ! -d "/usr/lib/modules/${BOOTC_KERNEL_VERSION}" ]; then
+    log "ERROR: Kernel modules directory not found: /usr/lib/modules/${BOOTC_KERNEL_VERSION}"
+    exit 1
+fi
+
+# Find the actual kernel source directory
+KERNEL_SOURCE_DIR=$(find /usr/src/kernels/ -maxdepth 1 -type d ! -path "/usr/src/kernels/" | head -1)
+if [ -z "$KERNEL_SOURCE_DIR" ]; then
+    log "ERROR: No kernel source directory found in /usr/src/kernels/"
+    exit 1
+fi
+log "KERNEL_SOURCE_DIR: ${KERNEL_SOURCE_DIR}"
 
 # Step 1: Install build dependencies
 log "Installing build dependencies..."
@@ -119,7 +133,7 @@ for module in $MODULES; do
     module_name=$(basename "$module")
     log "Signing: ${module_name}"
     
-    if "/usr/src/kernels/${BOOTC_KERNEL_VERSION}/scripts/sign-file" \
+    if "${KERNEL_SOURCE_DIR}/scripts/sign-file" \
         sha256 \
         /run/secrets/LOCALMOK \
         /etc/pki/mok/LOCALMOK.der \
