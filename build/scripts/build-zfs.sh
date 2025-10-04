@@ -208,7 +208,7 @@ for rpm in /tmp/zfs-kmod/*.rpm; do
     fi
     
     # Cleanup
-    rm -rf "$rpm_name" "${rpm_name}.cpio.gz"
+    rm -rf "$rpm_name"
 done
 
 log "✓ Successfully repackaged ${REPACKAGED_COUNT} kernel module RPMs"
