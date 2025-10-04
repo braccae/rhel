@@ -21,14 +21,8 @@ RUN --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/p
         git wget ncompress curl \
     && dnf clean all
 
-# Create MOK key for secure boot
-RUN mkdir -p /etc/pki/mok \
-    && openssl req -new -x509 -newkey rsa:2048 \
-       -keyout /etc/pki/mok/LOCALMOK.priv \
-       -outform DER -out /etc/pki/mok/LOCALMOK.der \
-       -nodes -days 36500 \
-       -subj "/CN=LOCALMOK/" \
-    && chmod 600 /etc/pki/mok/LOCALMOK.priv
+# Copy persistent MOK public key for secure boot
+COPY keys/mok/LOCALMOK.der /etc/pki/mok/LOCALMOK.der
 
 # Download and build ZFS
 RUN cd /tmp \
@@ -42,13 +36,14 @@ RUN cd /tmp \
     && make -j1 rpm-utils rpm-kmod
 
 # Separate ZFS RPMs, extract/sign kernel modules, and repackage RPMs
-RUN ZFS_VERSION=$(curl -s https://api.github.com/repos/openzfs/zfs/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/') \
+RUN --mount=type=secret,id=LOCALMOK \
+    ZFS_VERSION=$(curl -s https://api.github.com/repos/openzfs/zfs/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/') \
     && BOOTC_KERNEL_VERSION=$(ls /usr/lib/modules/ | head -1) \
     && mkdir -p /tmp/zfs-userland /tmp/zfs-kmod /tmp/zfs-extracted /tmp/zfs-repack /tmp/zfs-signed-rpms \
     # Separate userland and kernel module RPMs
     && find /tmp/$ZFS_VERSION -name "*.rpm" ! -name "*.src.rpm" ! -name "*debuginfo*" ! -name "*debugsource*" \
         \( -name "*kmod*" -exec cp {} /tmp/zfs-kmod/ \; \) \
-        , -exec cp {} /tmp/zfs-userland/ \; \
+        -o -exec cp {} /tmp/zfs-userland/ \; \
     # Extract kernel module RPMs
     && cd /tmp/zfs-extracted \
     && for rpm in /tmp/zfs-kmod/*.rpm; do \
@@ -58,7 +53,7 @@ RUN ZFS_VERSION=$(curl -s https://api.github.com/repos/openzfs/zfs/releases/late
     && for module in $(find /tmp/zfs-extracted -name "*.ko"); do \
         /usr/src/kernels/$BOOTC_KERNEL_VERSION/scripts/sign-file \
         sha256 \
-        /etc/pki/mok/LOCALMOK.priv \
+        /run/secrets/LOCALMOK \
         /etc/pki/mok/LOCALMOK.der \
         "$module"; \
     done \

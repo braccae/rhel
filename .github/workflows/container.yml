@@ -166,6 +166,7 @@ jobs:
         id: build
         env:
           GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
+          LOCALMOK: ${{ secrets.LOCALMOK }}
         with:
           context: .
           containerfiles: ./Containerfile
@@ -175,6 +176,7 @@ jobs:
           labels: ${{ needs.build-metadata.outputs.labels }}
           extra-args: |
             --secret id=GHCR_PULL_TOKEN,env=GHCR_PULL_TOKEN
+            --secret id=LOCALMOK,env=LOCALMOK
 
       - name: Push To Registry
         if: github.event_name != 'pull_request'

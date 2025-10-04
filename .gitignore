@@ -10,5 +10,9 @@ scratch/*
 ## Cosign Private Key
 cosign.key
 
+## MOK Private Key (keep public cert)
+keys/mok/LOCALMOK.priv
+!keys/mok/LOCALMOK.der
+
 # Built images and their manifests
 output/*

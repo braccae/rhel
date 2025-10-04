@@ -17,14 +17,52 @@ _escalate:
         export CALLING_UID=$(id -u)
         export CALLING_GID=$(id -g)
         if command -v run0 &> /dev/null; then
-            exec run0 "{{just_path()}}" "$@"
+            exec run0 just "$@"
         elif command -v sudo &> /dev/null; then
-            exec sudo "{{just_path()}}" "$@"
+            exec sudo just "$@"
         else
             echo "Error: Cannot escalate privileges. Please run with 'sudo' or 'run0'." >&2
             exit 1
         fi
     fi
+
+# ==============================================================================
+# MOK Key Management
+# ==============================================================================
+
+# Regenerate the MOK key pair for Secure Boot
+# This will overwrite existing keys and require re-enrollment
+regen-mok:
+    #!/bin/bash
+    set -euo pipefail
+    echo "=== Regenerating MOK Key Pair ==="
+    echo "WARNING: This will overwrite existing MOK keys!"
+    echo "You will need to re-enroll the new key in Secure Boot."
+    echo
+    read -p "Continue? (y/N): " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Cancelled."
+        exit 1
+    fi
+    
+    cd keys/mok
+    echo "Generating new MOK key pair..."
+    openssl req -new -x509 -newkey rsa:2048 \
+        -keyout LOCALMOK.priv \
+        -outform DER -out LOCALMOK.der \
+        -nodes -days 36500 \
+        -subj "/CN=LOCALMOK/"
+    chmod 600 LOCALMOK.priv
+    
+    echo "✓ MOK key pair regenerated successfully"
+    echo "Public certificate: $(pwd)/LOCALMOK.der"
+    echo "Private key: $(pwd)/LOCALMOK.priv"
+    echo
+    echo "Next steps:"
+    echo "1. Rebuild your container image"
+    echo "2. Run: sudo ./keys/enroll-mok.sh"
+    echo "3. Reboot and enroll the new key"
 
 # ==============================================================================
 # This file is organized into sections based on the scripts they replace.
@@ -134,7 +172,7 @@ _vm-build-disk containerfile='':
 # Example (remote image): just test-vm
 # Example (local image):  just test-vm Containerfile
 # Example (more resources): just test-vm '' 4096 4
-test-vm containerfile='' memory=_VM_MEMORY vcpus=_VM_VCPUS: _escalate check-vm-deps _vm-build-disk containerfile
+test-vm containerfile='' memory=_VM_MEMORY vcpus=_VM_VCPUS: _escalate check-vm-deps ( _vm-build-disk containerfile )
     #!/bin/bash
     set -euo pipefail
 
