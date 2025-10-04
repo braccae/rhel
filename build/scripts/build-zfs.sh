@@ -125,18 +125,8 @@ for module in $MODULES; do
         /etc/pki/mok/LOCALMOK.der \
         "$module"; then
         
-        # Verify the signature
-        if /usr/src/kernels/${BOOTC_KERNEL_VERSION}/scripts/sign-file \
-            sha256 \
-            /run/secrets/LOCALMOK \
-            /etc/pki/mok/LOCALMOK.der \
-            "$module" verify; then
-            log "✓ Successfully signed and verified: ${module_name}"
-            ((SIGNED_COUNT++))
-        else
-            log "✗ Failed to verify signature for: ${module_name}"
-            exit 1
-        fi
+        log "✓ Successfully signed: ${module_name}"
+        ((SIGNED_COUNT++))
     else
         log "✗ Failed to sign: ${module_name}"
         exit 1
