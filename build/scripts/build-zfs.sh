@@ -115,8 +115,8 @@ done
 
 # Step 6: Check if we have kernel modules to sign
 log "Looking for kernel modules to sign..."
-MODULES=$(find /tmp/zfs-extracted -name "*.ko")
-MODULE_COUNT=$(echo "$MODULES" | grep -c . || echo 0)
+mapfile -t MODULES < <(find /tmp/zfs-extracted -name "*.ko")
+MODULE_COUNT=${#MODULES[@]}
 
 if [ "$MODULE_COUNT" -eq 0 ]; then
     log "WARNING: No kernel modules found to sign!"
@@ -124,6 +124,7 @@ if [ "$MODULE_COUNT" -eq 0 ]; then
 fi
 
 log "Found ${MODULE_COUNT} kernel modules to sign"
+log "Modules to sign: ${MODULES[*]}"
 
 # Step 7: Check if signing key is available
 if [ ! -f "/run/secrets/LOCALMOK" ]; then
@@ -141,7 +142,7 @@ log "✓ Signing keys verified"
 # Step 8: Sign extracted kernel modules
 log "Signing kernel modules..."
 SIGNED_COUNT=0
-for module in $MODULES; do
+for module in "${MODULES[@]}"; do
     module_name=$(basename "$module")
     log "Signing: ${module_name}"
     
