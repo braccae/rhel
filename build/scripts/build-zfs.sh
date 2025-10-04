@@ -195,20 +195,15 @@ for rpm in /tmp/zfs-kmod/*.rpm; do
     mkdir -p "./usr/lib/modules/${BOOTC_KERNEL_VERSION}/extra/"
     find /tmp/zfs-extracted -name "*.ko" -exec cp {} "./usr/lib/modules/${BOOTC_KERNEL_VERSION}/extra/" \;
     
-    # Create new RPM
-    find . -type f | cpio -o -H newc --quiet | gzip > "../${rpm_name}.cpio.gz"
-    
+    # Since the modules are already signed in place, just copy the original RPM
     cd ..
     
-    # Rebuild RPM
-    log "Rebuilding RPM: ${rpm_name}"
-    if rpmbuild --rebuild "${rpm_name}.cpio.gz"; then
-        # Move to signed RPMs directory
-        mv -- *.rpm /tmp/zfs-signed-rpms/
+    log "Copying RPM with signed modules: ${rpm_name}"
+    if cp "$rpm" "/tmp/zfs-signed-rpms/${rpm_name}"; then
         ((REPACKAGED_COUNT++))
-        log "✓ Successfully repackaged: ${rpm_name}"
+        log "✓ Successfully copied (modules already signed): ${rpm_name}"
     else
-        log "✗ Failed to rebuild: ${rpm_name}"
+        log "✗ Failed to copy: ${rpm_name}"
         exit 1
     fi
     
