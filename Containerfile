@@ -17,24 +17,18 @@ RUN --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/p
        openssl-devel zlib-devel libaio-devel libattr-devel \
        elfutils-libelf-devel kernel-devel kernel-abi-stablelists \
        python3 python3-devel python3-setuptools python3-cffi \
-       libffi-devel python3-packaging dkms rpm-sign gnupg2 \
+       libffi-devel python3-packaging dkms \
         git wget ncompress curl \
     && dnf clean all
 
-# Create MOK key and convert to GPG format
-RUN mkdir -p /etc/pki/mok /tmp/gpg \
+# Create MOK key for secure boot
+RUN mkdir -p /etc/pki/mok \
     && openssl req -new -x509 -newkey rsa:2048 \
        -keyout /etc/pki/mok/LOCALMOK.priv \
        -outform DER -out /etc/pki/mok/LOCALMOK.der \
        -nodes -days 36500 \
        -subj "/CN=LOCALMOK/" \
-    && chmod 600 /etc/pki/mok/LOCALMOK.priv \
-    # Convert certificate to PEM format for GPG import
-    && openssl x509 -in /etc/pki/mok/LOCALMOK.der -inform DER -out /tmp/gpg/LOCALMOK.pem -outform PEM \
-    # Create GPG key from the same certificate
-    && gpg --batch --import /tmp/gpg/LOCALMOK.pem \
-    && echo "allow-preset-passphrase" >> ~/.gnupg/gpg-agent.conf \
-    && gpg --list-secret-keys --keyid-format LONG
+    && chmod 600 /etc/pki/mok/LOCALMOK.priv
 
 # Download and build ZFS
 RUN cd /tmp \
@@ -47,10 +41,10 @@ RUN cd /tmp \
     && ./configure --with-spec=redhat \
     && make -j1 rpm-utils rpm-kmod
 
-# Separate ZFS RPMs and extract/sign kernel modules
+# Separate ZFS RPMs, extract/sign kernel modules, and repackage RPMs
 RUN ZFS_VERSION=$(curl -s https://api.github.com/repos/openzfs/zfs/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/') \
     && BOOTC_KERNEL_VERSION=$(ls /usr/lib/modules/ | head -1) \
-    && mkdir -p /tmp/zfs-userland /tmp/zfs-kmod /tmp/zfs-extracted /tmp/zfs-signed-modules/usr/lib/modules/$BOOTC_KERNEL_VERSION/extra \
+    && mkdir -p /tmp/zfs-userland /tmp/zfs-kmod /tmp/zfs-extracted /tmp/zfs-repack /tmp/zfs-signed-rpms \
     # Separate userland and kernel module RPMs
     && find /tmp/$ZFS_VERSION -name "*.rpm" ! -name "*.src.rpm" ! -name "*debuginfo*" ! -name "*debugsource*" \
         \( -name "*kmod*" -exec cp {} /tmp/zfs-kmod/ \; \) \
@@ -68,8 +62,20 @@ RUN ZFS_VERSION=$(curl -s https://api.github.com/repos/openzfs/zfs/releases/late
         /etc/pki/mok/LOCALMOK.der \
         "$module"; \
     done \
-    # Copy signed modules to final destination structure
-    && find /tmp/zfs-extracted -name "*.ko" -exec cp {} /tmp/zfs-signed-modules/usr/lib/modules/$BOOTC_KERNEL_VERSION/extra/ \;
+    # Repackage kernel module RPMs with signed modules
+    && cd /tmp/zfs-repack \
+    && for rpm in /tmp/zfs-kmod/*.rpm; do \
+        rpm_name=$(basename "$rpm") \
+        && mkdir -p "$rpm_name" \
+        && cd "$rpm_name" \
+        && rpm2cpio "$rpm" | cpio -idmv \
+        && find /tmp/zfs-extracted -name "*.ko" -exec cp {} ./usr/lib/modules/$BOOTC_KERNEL_VERSION/extra/ \; \
+        && find . -type f | cpio -o -H newc --quiet | gzip > ../"$rpm_name.cpio.gz" \
+        && cd .. \
+        && rpm --rebuild "$rpm_name.cpio.gz" \
+        && mv *.rpm /tmp/zfs-signed-rpms/ \
+        && cd .. \
+    done
 
 # Final stage
 FROM base
@@ -79,10 +85,10 @@ ARG ENTITLEMENT_IMAGE=ghcr.io/braccae/rhel
 ARG ENTITLEMENT_TAG=repos
 ARG GHCR_USERNAME=braccae
 
-# Copy ZFS userland packages, signed kernel modules, and MOK key from builder
-RUN mkdir -p /tmp/zfs-userland
-COPY --from=zfs-builder /tmp/zfs-userland/ /tmp/zfs-userland/
-COPY --from=zfs-builder /tmp/zfs-signed-modules/ /
+# Copy ZFS packages (userland + signed kernel module RPMs) and MOK key from builder
+RUN mkdir -p /tmp/zfs-rpms
+COPY --from=zfs-builder /tmp/zfs-userland/ /tmp/zfs-rpms/
+COPY --from=zfs-builder /tmp/zfs-signed-rpms/ /tmp/zfs-rpms/
 COPY --from=zfs-builder /etc/pki/mok/ /etc/pki/mok/
 
 RUN --mount=type=secret,id=GHCR_PULL_TOKEN \
@@ -114,8 +120,8 @@ RUN --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/p
     cockpit-files \
     python3-psycopg2 \
     python3-pip \
-    && dnf install -y /tmp/zfs-userland/*.rpm \
-    && rm -rf /tmp/zfs-userland \
+    && dnf install -y /tmp/zfs-rpms/*.rpm \
+    && rm -rf /tmp/zfs-rpms \
     && dnf clean all
 
 COPY rootfs/common/ /
