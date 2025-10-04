@@ -21,7 +21,7 @@ log "ENTITLEMENT_IMAGE: ${ENTITLEMENT_IMAGE}"
 log "ENTITLEMENT_TAG: ${ENTITLEMENT_TAG}"
 
 # Get bootc kernel version
-BOOTC_KERNEL_VERSION=$(ls /usr/lib/modules/ | head -1)
+BOOTC_KERNEL_VERSION=$(find /usr/lib/modules/ -maxdepth 1 -type d -printf "%f\n" | head -1)
 log "BOOTC_KERNEL_VERSION: ${BOOTC_KERNEL_VERSION}"
 
 # Step 1: Install build dependencies
@@ -43,12 +43,12 @@ cd /tmp
 
 # Download ZFS source
 log "Downloading ZFS version: ${ZFS_VERSION}"
-wget https://github.com/openzfs/zfs/releases/download/${ZFS_VERSION}/${ZFS_VERSION}.tar.gz
+wget "https://github.com/openzfs/zfs/releases/download/${ZFS_VERSION}/${ZFS_VERSION}.tar.gz"
 
 # Extract and build
 log "Extracting ZFS source..."
-tar -xzf ${ZFS_VERSION}.tar.gz
-cd ${ZFS_VERSION}
+tar -xzf "${ZFS_VERSION}.tar.gz"
+cd "${ZFS_VERSION}"
 
 log "Configuring ZFS build..."
 ./configure --with-spec=redhat
@@ -64,12 +64,12 @@ mkdir -p /tmp/zfs-userland /tmp/zfs-kmod /tmp/zfs-extracted /tmp/zfs-repack /tmp
 
 # Step 4: Separate userland and kernel module RPMs
 log "Separating RPMs into userland and kernel modules..."
-find /tmp/${ZFS_VERSION} -name "*.rpm" ! -name "*.src.rpm" ! -name "*debuginfo*" ! -name "*debugsource*" \
+find "/tmp/${ZFS_VERSION}" -name "*.rpm" ! -name "*.src.rpm" ! -name "*debuginfo*" ! -name "*debugsource*" \
     \( -name "*kmod*" -exec cp {} /tmp/zfs-kmod/ \; \) \
     -o -exec cp {} /tmp/zfs-userland/ \;
 
-KMOD_COUNT=$(ls /tmp/zfs-kmod/ | wc -l)
-USERLAND_COUNT=$(ls /tmp/zfs-userland/ | wc -l)
+KMOD_COUNT=$(find /tmp/zfs-kmod/ -maxdepth 1 -type f -name "*.rpm" | wc -l)
+USERLAND_COUNT=$(find /tmp/zfs-userland/ -maxdepth 1 -type f -name "*.rpm" | wc -l)
 
 log "Found ${KMOD_COUNT} kernel module RPMs"
 log "Found ${USERLAND_COUNT} userland RPMs"
@@ -119,7 +119,7 @@ for module in $MODULES; do
     module_name=$(basename "$module")
     log "Signing: ${module_name}"
     
-    if /usr/src/kernels/${BOOTC_KERNEL_VERSION}/scripts/sign-file \
+    if "/usr/src/kernels/${BOOTC_KERNEL_VERSION}/scripts/sign-file" \
         sha256 \
         /run/secrets/LOCALMOK \
         /etc/pki/mok/LOCALMOK.der \
@@ -151,7 +151,7 @@ for rpm in /tmp/zfs-kmod/*.rpm; do
     rpm2cpio "$rpm" | cpio -idmv
     
     # Copy signed modules
-    find /tmp/zfs-extracted -name "*.ko" -exec cp {} ./usr/lib/modules/${BOOTC_KERNEL_VERSION}/extra/ \;
+    find /tmp/zfs-extracted -name "*.ko" -exec cp {} "./usr/lib/modules/${BOOTC_KERNEL_VERSION}/extra/" \;
     
     # Create new RPM
     find . -type f | cpio -o -H newc --quiet | gzip > "../${rpm_name}.cpio.gz"
@@ -162,7 +162,7 @@ for rpm in /tmp/zfs-kmod/*.rpm; do
     log "Rebuilding RPM: ${rpm_name}"
     if rpm --rebuild "${rpm_name}.cpio.gz"; then
         # Move to signed RPMs directory
-        mv *.rpm /tmp/zfs-signed-rpms/
+        mv -- *.rpm /tmp/zfs-signed-rpms/
         ((REPACKAGED_COUNT++))
         log "✓ Successfully repackaged: ${rpm_name}"
     else
@@ -179,7 +179,7 @@ log "✓ Successfully repackaged ${REPACKAGED_COUNT} kernel module RPMs"
 # Step 10: Clean up build artifacts
 log "Cleaning up build artifacts..."
 dnf clean all
-rm -rf /tmp/${ZFS_VERSION} /tmp/${ZFS_VERSION}.tar.gz
+rm -rf "/tmp/${ZFS_VERSION}" "/tmp/${ZFS_VERSION}.tar.gz"
 
 # Final summary
 log "=========================================="
@@ -192,8 +192,8 @@ log "  - Kernel Modules Signed: ${SIGNED_COUNT}"
 log "  - RPMs Repackaged: ${REPACKAGED_COUNT}"
 log ""
 log "Signed RPMs created:"
-if [ "$(ls -A /tmp/zfs-signed-rpms/)" ]; then
-    ls -la /tmp/zfs-signed-rpms/ | while read -r line; do
+if [ -n "$(find /tmp/zfs-signed-rpms/ -maxdepth 1 -type f -name "*.rpm" -print -quit)" ]; then
+    find /tmp/zfs-signed-rpms/ -maxdepth 1 -type f -name "*.rpm" -exec ls -la {} \; | while read -r line; do
         log "  $line"
     done
 else
@@ -202,8 +202,8 @@ fi
 
 log ""
 log "Userland RPMs available:"
-if [ "$(ls -A /tmp/zfs-userland/)" ]; then
-    ls -la /tmp/zfs-userland/ | while read -r line; do
+if [ -n "$(find /tmp/zfs-userland/ -maxdepth 1 -type f -name "*.rpm" -print -quit)" ]; then
+    find /tmp/zfs-userland/ -maxdepth 1 -type f -name "*.rpm" -exec ls -la {} \; | while read -r line; do
         log "  $line"
     done
 else
