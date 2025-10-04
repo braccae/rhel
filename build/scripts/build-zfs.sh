@@ -156,32 +156,22 @@ log "✓ Successfully signed ${SIGNED_COUNT} kernel modules"
 
 # Step 9: Repackage kernel module RPMs with signed modules
 log "Repackaging kernel module RPMs..."
+dnf install -y rpmrebuild
 REPACKAGED_COUNT=0
 
-# Create a script to replace modules inside rpmrebuild's environment
-cat << 'EOF' > /tmp/update_kmod.sh
-#!/bin/bash
-set -e
-SPEC_FILE="$1"
-SPEC_DIR=$(dirname "$SPEC_FILE")
-TOP_DIR=$(dirname "$SPEC_DIR")
-BUILD_DIR="$TOP_DIR/BUILD"
-log_file="/tmp/zfs-build.log"
+for rpm in /tmp/zfs-kmod/*.rpm; do
+    rpm_name=$(basename "$rpm")
+    log "Repackaging: ${rpm_name}"
 
-echo "--- Running update_kmod.sh ---" >> "$log_file"
-echo "Spec file: $SPEC_FILE" >> "$log_file"
-echo "Build dir: $BUILD_DIR" >> "$log_file"
+    # Temporarily install the RPM. Use --force to handle if it's already installed.
+    log "Installing ${rpm_name} temporarily..."
+    rpm -i --force "$rpm"
+    
+    package_name=$(rpm -qp --queryformat '%{NAME}' "$rpm")
 
-# Find the build source directory (e.g., BUILD/zfs-kmod-2.3.4)
-BUILD_SOURCE_DIR=$(find "$BUILD_DIR" -mindepth 1 -maxdepth 1 -type d | head -n 1)
-echo "Build source dir: $BUILD_SOURCE_DIR" >> "$log_file"
-
-if [ -z "$BUILD_SOURCE_DIR" ] || [ ! -d "$BUILD_SOURCE_DIR" ]; then
-    echo "✗ Could not determine build source directory." >> "$log_file"
-    exit 1
-fi
-
-find "$BUILD_SOURCE_DIR" -name "*.ko" -print0 | while IFS= read -r -d $' ' module_path; do
+    # Overwrite the installed, unsigned .ko files with our signed versions
+    log "Replacing installed kernel modules with signed versions..."
+    installed_kos=$(rpm -ql "$package_name" | grep '\.ko$' ' module_path; do
     module_basename=$(basename "$module_path")
     # Find the corresponding signed module in our central directory
     signed_module=$(find /tmp/zfs-extracted/usr -name "$module_basename")
