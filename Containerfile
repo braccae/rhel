@@ -17,18 +17,24 @@ RUN --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/p
        openssl-devel zlib-devel libaio-devel libattr-devel \
        elfutils-libelf-devel kernel-devel kernel-abi-stablelists \
        python3 python3-devel python3-setuptools python3-cffi \
-       libffi-devel python3-packaging dkms \
+       libffi-devel python3-packaging dkms rpm-sign gnupg2 \
         git wget ncompress curl \
     && dnf clean all
 
-# Create MOK key for secure boot
-RUN mkdir -p /etc/pki/mok \
+# Create MOK key and convert to GPG format
+RUN mkdir -p /etc/pki/mok /tmp/gpg \
     && openssl req -new -x509 -newkey rsa:2048 \
        -keyout /etc/pki/mok/LOCALMOK.priv \
        -outform DER -out /etc/pki/mok/LOCALMOK.der \
        -nodes -days 36500 \
        -subj "/CN=LOCALMOK/" \
-    && chmod 600 /etc/pki/mok/LOCALMOK.priv
+    && chmod 600 /etc/pki/mok/LOCALMOK.priv \
+    # Convert certificate to PEM format for GPG import
+    && openssl x509 -in /etc/pki/mok/LOCALMOK.der -inform DER -out /tmp/gpg/LOCALMOK.pem -outform PEM \
+    # Create GPG key from the same certificate
+    && gpg --batch --import /tmp/gpg/LOCALMOK.pem \
+    && echo "allow-preset-passphrase" >> ~/.gnupg/gpg-agent.conf \
+    && gpg --list-secret-keys --keyid-format LONG
 
 # Download and build ZFS
 RUN cd /tmp \
@@ -41,16 +47,9 @@ RUN cd /tmp \
     && ./configure --with-spec=redhat \
     && make -j1 rpm-utils rpm-kmod
 
-# Sign the kernel modules
+# Sign the ZFS RPM packages with GPG key
 RUN ZFS_VERSION=$(curl -s https://api.github.com/repos/openzfs/zfs/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/') \
-    && BOOTC_KERNEL_VERSION=$(ls /usr/lib/modules/ | head -1) \
-    && for module in $(find /tmp/$ZFS_VERSION -name "*.ko"); do \
-        /usr/src/kernels/$BOOTC_KERNEL_VERSION/scripts/sign-file \
-        sha256 \
-        /etc/pki/mok/LOCALMOK.priv \
-        /etc/pki/mok/LOCALMOK.der \
-        "$module"; \
-    done
+    && find /tmp/$ZFS_VERSION -name "*.rpm" ! -name "*.src.rpm" ! -name "*debuginfo*" ! -name "*debugsource*" -exec rpmsign --addsign --key-id=LOCALMOK {} \;
 
 # Final stage
 FROM base
@@ -65,6 +64,7 @@ RUN mkdir -p /tmp/zfs-rpms
 COPY --from=zfs-builder /tmp/ /tmp/zfs-source/
 RUN find /tmp/zfs-source -name "*.rpm" ! -name "*.src.rpm" ! -name "*debuginfo*" ! -name "*debugsource*" -exec cp {} /tmp/zfs-rpms/ \;
 COPY --from=zfs-builder /etc/pki/mok/ /etc/pki/mok/
+COPY --from=zfs-builder /root/.gnupg/ /root/.gnupg/
 
 RUN --mount=type=secret,id=GHCR_PULL_TOKEN \
        export GHCR_AUTH_B64=$(echo -n "${GHCR_USERNAME}:$(cat /run/secrets/GHCR_PULL_TOKEN)" | base64 -w 0) \
