@@ -142,6 +142,8 @@ log "✓ Signing keys verified"
 # Step 8: Sign extracted kernel modules
 log "Signing kernel modules..."
 SIGNED_COUNT=0
+# Temporarily disable set -e to allow explicit error handling in the loop
+set +e
 for module in "${MODULES[@]}"; do
     module_name=$(basename "$module")
     log "Signing: ${module_name}"
@@ -149,6 +151,7 @@ for module in "${MODULES[@]}"; do
     # Check if module exists before signing
     if [ ! -f "$module" ]; then
         log "✗ Module not found: ${module}"
+        set -e
         exit 1
     fi
     
@@ -164,9 +167,12 @@ for module in "${MODULES[@]}"; do
     else
         sign_exit_code=$?
         log "✗ Failed to sign: ${module_name} (exit code: ${sign_exit_code})"
+        set -e
         exit 1
     fi
 done
+# Re-enable set -e after the loop
+set -e
 
 log "✓ Successfully signed ${SIGNED_COUNT} kernel modules"
 
