@@ -239,7 +239,31 @@ log "✓ Successfully repackaged ${REPACKAGED_COUNT} kernel module RPMs"
 # Re-enable set -e after the repackaging section
 set -e
 
-# Step 10: Clean up build artifacts
+# Step 10: Copy installable RPMs to zfs-rpms directory
+log "Copying installable RPMs to /tmp/zfs-rpms/..."
+mkdir -p /tmp/zfs-rpms
+
+# Copy userland RPMs (excluding source RPMs)
+for rpm in /tmp/zfs-userland/*.rpm; do
+    if [[ "$rpm" != *.src.rpm ]]; then
+        log "Copying userland RPM: $(basename "$rpm")"
+        cp "$rpm" /tmp/zfs-rpms/
+    else
+        log "Skipping source RPM: $(basename "$rpm")"
+    fi
+done
+
+# Copy signed kernel module RPMs
+for rpm in /tmp/zfs-signed-rpms/*.rpm; do
+    if [ -f "$rpm" ]; then
+        log "Copying signed kernel module RPM: $(basename "$rpm")"
+        cp "$rpm" /tmp/zfs-rpms/
+    fi
+done
+
+log "✓ Copied installable RPMs to /tmp/zfs-rpms/"
+
+# Step 11: Clean up build artifacts
 log "Cleaning up build artifacts..."
 dnf clean all
 rm -rf "/tmp/${ZFS_VERSION}" "/tmp/${ZFS_VERSION}.tar.gz"
