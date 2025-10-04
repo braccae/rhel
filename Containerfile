@@ -34,8 +34,7 @@ ARG GHCR_USERNAME=braccae
 
 # Copy ZFS packages (userland + signed kernel module RPMs) and MOK key from builder
 RUN mkdir -p /tmp/zfs-rpms
-COPY --from=zfs-builder /tmp/zfs-userland/ /tmp/zfs-rpms/
-COPY --from=zfs-builder /tmp/zfs-signed-rpms/ /tmp/zfs-rpms/
+COPY --from=zfs-builder /tmp/zfs-rpms /tmp/zfs-rpms
 COPY --from=zfs-builder /etc/pki/mok/ /etc/pki/mok/
 
 RUN --mount=type=secret,id=GHCR_PULL_TOKEN \
