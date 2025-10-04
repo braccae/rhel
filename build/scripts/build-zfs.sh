@@ -243,21 +243,23 @@ set -e
 log "Copying installable RPMs to /tmp/zfs-rpms/..."
 mkdir -p /tmp/zfs-rpms
 
-# Copy userland RPMs (excluding source RPMs)
+# Copy userland RPMs (excluding source and debug RPMs)
 for rpm in /tmp/zfs-userland/*.rpm; do
-    if [[ "$rpm" != *.src.rpm ]]; then
+    if [[ "$rpm" != *.src.rpm && "$rpm" != *debug* ]]; then
         log "Copying userland RPM: $(basename "$rpm")"
         cp "$rpm" /tmp/zfs-rpms/
     else
-        log "Skipping source RPM: $(basename "$rpm")"
+        log "Skipping RPM: $(basename "$rpm")"
     fi
 done
 
-# Copy signed kernel module RPMs
+# Copy signed kernel module RPMs (excluding source and debug RPMs)
 for rpm in /tmp/zfs-signed-rpms/*.rpm; do
-    if [ -f "$rpm" ]; then
+    if [ -f "$rpm" ] && [[ "$rpm" != *.src.rpm && "$rpm" != *debug* ]]; then
         log "Copying signed kernel module RPM: $(basename "$rpm")"
         cp "$rpm" /tmp/zfs-rpms/
+    else
+        log "Skipping RPM: $(basename "$rpm")"
     fi
 done
 
