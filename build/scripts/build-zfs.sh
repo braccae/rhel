@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -euo pipefail
+#set -euo pipefail
 
 # Debug logging
 exec 1> >(tee -a /tmp/zfs-build.log)
