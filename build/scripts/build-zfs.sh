@@ -20,15 +20,36 @@ log "ZFS_VERSION: ${ZFS_VERSION}"
 log "ENTITLEMENT_IMAGE: ${ENTITLEMENT_IMAGE}"
 log "ENTITLEMENT_TAG: ${ENTITLEMENT_TAG}"
 
-# Get bootc kernel version
-BOOTC_KERNEL_VERSION=$(find /usr/lib/modules/ -maxdepth 1 -type d ! -path "/usr/lib/modules/" -printf "%f\n" | head -1)
-log "BOOTC_KERNEL_VERSION: ${BOOTC_KERNEL_VERSION}"
+# Step 1: Install build dependencies
+log "Installing build dependencies..."
+dnf install -y --skip-broken \
+   gcc make autoconf automake libtool rpm-build kernel-rpm-macros \
+   libtirpc-devel libblkid-devel libuuid-devel libudev-devel \
+   openssl-devel zlib-devel libaio-devel libattr-devel \
+   elfutils-libelf-devel kernel-devel kernel-abi-stablelists \
+   python3 python3-devel python3-setuptools python3-cffi \
+   libffi-devel python3-packaging dkms \
+   git wget ncompress curl
+
+log "✓ Build dependencies installed successfully"
 
 # Verify kernel directories exist
 if [ ! -d "/usr/lib/modules/${BOOTC_KERNEL_VERSION}" ]; then
     log "ERROR: Kernel modules directory not found: /usr/lib/modules/${BOOTC_KERNEL_VERSION}"
     exit 1
 fi
+
+# Get bootc kernel version
+BOOTC_KERNEL_VERSION=$(find /usr/lib/modules/ -maxdepth 1 -type d ! -path "/usr/lib/modules/" -printf "%f\n" | head -1)
+log "BOOTC_KERNEL_VERSION: ${BOOTC_KERNEL_VERSION}"
+
+# Install kernel headers for the specific kernel version
+log "Installing kernel headers for ${BOOTC_KERNEL_VERSION}..."
+dnf install -y "kernel-devel-${BOOTC_KERNEL_VERSION}" || {
+    log "WARNING: Could not install kernel-devel-${BOOTC_KERNEL_VERSION}"
+    log "Trying to install latest kernel-devel..."
+    dnf install -y kernel-devel
+}
 
 # Find the actual kernel source directory
 KERNEL_SOURCE_DIR=$(find /usr/src/kernels/ -maxdepth 1 -type d ! -path "/usr/src/kernels/" | head -1)
@@ -47,27 +68,6 @@ if [ ! -f "${KERNEL_SOURCE_DIR}/scripts/sign-file" ]; then
     ls -la "${KERNEL_SOURCE_DIR}/scripts/" || log "Scripts directory does not exist"
     exit 1
 fi
-
-# Step 1: Install build dependencies
-log "Installing build dependencies..."
-dnf install -y --skip-broken \
-   gcc make autoconf automake libtool rpm-build kernel-rpm-macros \
-   libtirpc-devel libblkid-devel libuuid-devel libudev-devel \
-   openssl-devel zlib-devel libaio-devel libattr-devel \
-   elfutils-libelf-devel kernel-devel kernel-abi-stablelists \
-   python3 python3-devel python3-setuptools python3-cffi \
-   libffi-devel python3-packaging dkms \
-   git wget ncompress curl
-
-# Install kernel headers for the specific kernel version
-log "Installing kernel headers for ${BOOTC_KERNEL_VERSION}..."
-dnf install -y "kernel-devel-${BOOTC_KERNEL_VERSION}" || {
-    log "WARNING: Could not install kernel-devel-${BOOTC_KERNEL_VERSION}"
-    log "Trying to install latest kernel-devel..."
-    dnf install -y kernel-devel
-}
-
-log "✓ Build dependencies installed successfully"
 
 # Step 2: Download and build ZFS
 log "Downloading and building ZFS..."
