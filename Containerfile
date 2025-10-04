@@ -4,6 +4,7 @@ FROM base AS zfs-builder
 
 ARG ENTITLEMENT_IMAGE=ghcr.io/braccae/rhel
 ARG ENTITLEMENT_TAG=repos
+ARG ZFS_VERSION=zfs-2.3.4
 
 # Set up entitlements for build stage
 
@@ -26,7 +27,6 @@ COPY keys/mok/LOCALMOK.der /etc/pki/mok/LOCALMOK.der
 
 # Download and build ZFS
 RUN cd /tmp \
-    && ZFS_VERSION=$(curl -s https://api.github.com/repos/openzfs/zfs/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/') \
     && BOOTC_KERNEL_VERSION=$(ls /usr/lib/modules/ | head -1) \
     && echo "Building ZFS version: $ZFS_VERSION for bootc kernel: $BOOTC_KERNEL_VERSION" \
     && wget https://github.com/openzfs/zfs/releases/download/$ZFS_VERSION/$ZFS_VERSION.tar.gz \
@@ -37,8 +37,7 @@ RUN cd /tmp \
 
 # Separate ZFS RPMs, extract/sign kernel modules, and repackage RPMs
 RUN --mount=type=secret,id=LOCALMOK \
-    ZFS_VERSION=$(curl -s https://api.github.com/repos/openzfs/zfs/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/') \
-    && BOOTC_KERNEL_VERSION=$(ls /usr/lib/modules/ | head -1) \
+    BOOTC_KERNEL_VERSION=$(ls /usr/lib/modules/ | head -1) \
     && mkdir -p /tmp/zfs-userland /tmp/zfs-kmod /tmp/zfs-extracted /tmp/zfs-repack /tmp/zfs-signed-rpms \
     # Separate userland and kernel module RPMs
     && find /tmp/$ZFS_VERSION -name "*.rpm" ! -name "*.src.rpm" ! -name "*debuginfo*" ! -name "*debugsource*" \

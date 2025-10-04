@@ -161,6 +161,13 @@ jobs:
           username: ${{ secrets.RHCR_ID }}
           password: ${{ secrets.RHCR_KEY }}
 
+      - name: Get latest ZFS version
+        id: zfs_version
+        run: |
+          ZFS_VERSION=$(curl -s https://api.github.com/repos/openzfs/zfs/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' || echo "zfs-2.3.4")
+          echo "ZFS_VERSION=${ZFS_VERSION}" >> $GITHUB_OUTPUT
+          echo "Using ZFS version: ${ZFS_VERSION}"
+
       - name: Build Image
         uses: redhat-actions/buildah-build@v2
         id: build
@@ -174,6 +181,8 @@ jobs:
           image: ${{ env.REGISTRY }}/${{ github.repository }}
           tags: ${{ needs.build-metadata.outputs.tags }}
           labels: ${{ needs.build-metadata.outputs.labels }}
+          build-args: |
+            ZFS_VERSION=${{ steps.zfs_version.outputs.ZFS_VERSION }}
           extra-args: |
             --secret id=GHCR_PULL_TOKEN,env=GHCR_PULL_TOKEN
             --secret id=LOCALMOK,env=LOCALMOK
