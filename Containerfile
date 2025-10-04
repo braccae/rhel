@@ -6,70 +6,23 @@ ARG ENTITLEMENT_IMAGE=ghcr.io/braccae/rhel
 ARG ENTITLEMENT_TAG=repos
 ARG ZFS_VERSION=zfs-2.3.4
 
-# Set up entitlements for build stage
+# Copy persistent MOK public key for secure boot
+COPY keys/mok/LOCALMOK.der /etc/pki/mok/LOCALMOK.der
 
+# Copy comprehensive ZFS build script
+COPY build/scripts/build-zfs.sh /tmp/build-zfs.sh
+RUN chmod +x /tmp/build-zfs.sh
+
+# Complete ZFS build process: install deps, download, build, sign, and repackage
 RUN --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/pki/entitlement,target=/etc/pki/entitlement \
     --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/rhsm,target=/etc/rhsm \
     --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/yum.repos.d,target=/etc/yum.repos.d \
     --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/pki/rpm-gpg,target=/etc/pki/rpm-gpg \
-    dnf install -y --skip-broken \
-       gcc make autoconf automake libtool rpm-build kernel-rpm-macros \
-       libtirpc-devel libblkid-devel libuuid-devel libudev-devel \
-       openssl-devel zlib-devel libaio-devel libattr-devel \
-       elfutils-libelf-devel kernel-devel kernel-abi-stablelists \
-       python3 python3-devel python3-setuptools python3-cffi \
-       libffi-devel python3-packaging dkms \
-        git wget ncompress curl \
-    && dnf clean all
-
-# Copy persistent MOK public key for secure boot
-COPY keys/mok/LOCALMOK.der /etc/pki/mok/LOCALMOK.der
-
-# Download and build ZFS
-RUN cd /tmp \
-    && BOOTC_KERNEL_VERSION=$(ls /usr/lib/modules/ | head -1) \
-    && echo "Building ZFS version: $ZFS_VERSION for bootc kernel: $BOOTC_KERNEL_VERSION" \
-    && wget https://github.com/openzfs/zfs/releases/download/$ZFS_VERSION/$ZFS_VERSION.tar.gz \
-    && tar -xzf $ZFS_VERSION.tar.gz \
-    && cd $ZFS_VERSION \
-    && ./configure --with-spec=redhat \
-    && make -j1 rpm-utils rpm-kmod
-
-# Separate ZFS RPMs, extract/sign kernel modules, and repackage RPMs
-RUN --mount=type=secret,id=LOCALMOK \
-    BOOTC_KERNEL_VERSION=$(ls /usr/lib/modules/ | head -1) \
-    && mkdir -p /tmp/zfs-userland /tmp/zfs-kmod /tmp/zfs-extracted /tmp/zfs-repack /tmp/zfs-signed-rpms \
-    # Separate userland and kernel module RPMs
-    && find /tmp/$ZFS_VERSION -name "*.rpm" ! -name "*.src.rpm" ! -name "*debuginfo*" ! -name "*debugsource*" \
-        \( -name "*kmod*" -exec cp {} /tmp/zfs-kmod/ \; \) \
-        -o -exec cp {} /tmp/zfs-userland/ \; \
-    # Extract kernel module RPMs
-    && cd /tmp/zfs-extracted \
-    && for rpm in /tmp/zfs-kmod/*.rpm; do \
-        rpm2cpio "$rpm" | cpio -idmv; \
-    done \
-    # Sign extracted kernel modules
-    && for module in $(find /tmp/zfs-extracted -name "*.ko"); do \
-        /usr/src/kernels/$BOOTC_KERNEL_VERSION/scripts/sign-file \
-        sha256 \
-        /run/secrets/LOCALMOK \
-        /etc/pki/mok/LOCALMOK.der \
-        "$module"; \
-    done \
-    # Repackage kernel module RPMs with signed modules
-    && cd /tmp/zfs-repack \
-    && for rpm in /tmp/zfs-kmod/*.rpm; do \
-        rpm_name=$(basename "$rpm") \
-        && mkdir -p "$rpm_name" \
-        && cd "$rpm_name" \
-        && rpm2cpio "$rpm" | cpio -idmv \
-        && find /tmp/zfs-extracted -name "*.ko" -exec cp {} ./usr/lib/modules/$BOOTC_KERNEL_VERSION/extra/ \; \
-        && find . -type f | cpio -o -H newc --quiet | gzip > ../"$rpm_name.cpio.gz" \
-        && cd .. \
-        && rpm --rebuild "$rpm_name.cpio.gz" \
-        && mv *.rpm /tmp/zfs-signed-rpms/ \
-        && cd .. \
-    done
+    --mount=type=secret,id=LOCALMOK \
+    ZFS_VERSION=$ZFS_VERSION \
+    ENTITLEMENT_IMAGE=$ENTITLEMENT_IMAGE \
+    ENTITLEMENT_TAG=$ENTITLEMENT_TAG \
+    /tmp/build-zfs.sh
 
 # Final stage
 FROM base
