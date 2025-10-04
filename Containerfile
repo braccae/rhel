@@ -1,4 +1,4 @@
-# Build stage for ZFS kernel modules
+# Build stage for ZFS kernel modules - Updated build process
 FROM registry.redhat.io/rhel9/rhel-bootc:9.6 AS base
 FROM base AS zfs-builder
 
