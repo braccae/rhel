@@ -47,9 +47,29 @@ RUN cd /tmp \
     && ./configure --with-spec=redhat \
     && make -j1 rpm-utils rpm-kmod
 
-# Sign the ZFS RPM packages with GPG key
+# Separate ZFS RPMs and extract/sign kernel modules
 RUN ZFS_VERSION=$(curl -s https://api.github.com/repos/openzfs/zfs/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/') \
-    && find /tmp/$ZFS_VERSION -name "*.rpm" ! -name "*.src.rpm" ! -name "*debuginfo*" ! -name "*debugsource*" -exec rpmsign --addsign --key-id=LOCALMOK {} \;
+    && BOOTC_KERNEL_VERSION=$(ls /usr/lib/modules/ | head -1) \
+    && mkdir -p /tmp/zfs-userland /tmp/zfs-kmod /tmp/zfs-extracted /tmp/zfs-signed-modules/usr/lib/modules/$BOOTC_KERNEL_VERSION/extra \
+    # Separate userland and kernel module RPMs
+    && find /tmp/$ZFS_VERSION -name "*.rpm" ! -name "*.src.rpm" ! -name "*debuginfo*" ! -name "*debugsource*" \
+        \( -name "*kmod*" -exec cp {} /tmp/zfs-kmod/ \; \) \
+        , -exec cp {} /tmp/zfs-userland/ \; \
+    # Extract kernel module RPMs
+    && cd /tmp/zfs-extracted \
+    && for rpm in /tmp/zfs-kmod/*.rpm; do \
+        rpm2cpio "$rpm" | cpio -idmv; \
+    done \
+    # Sign extracted kernel modules
+    && for module in $(find /tmp/zfs-extracted -name "*.ko"); do \
+        /usr/src/kernels/$BOOTC_KERNEL_VERSION/scripts/sign-file \
+        sha256 \
+        /etc/pki/mok/LOCALMOK.priv \
+        /etc/pki/mok/LOCALMOK.der \
+        "$module"; \
+    done \
+    # Copy signed modules to final destination structure
+    && find /tmp/zfs-extracted -name "*.ko" -exec cp {} /tmp/zfs-signed-modules/usr/lib/modules/$BOOTC_KERNEL_VERSION/extra/ \;
 
 # Final stage
 FROM base
@@ -59,12 +79,11 @@ ARG ENTITLEMENT_IMAGE=ghcr.io/braccae/rhel
 ARG ENTITLEMENT_TAG=repos
 ARG GHCR_USERNAME=braccae
 
-# Copy ZFS packages and MOK key from builder
-RUN mkdir -p /tmp/zfs-rpms
-COPY --from=zfs-builder /tmp/ /tmp/zfs-source/
-RUN find /tmp/zfs-source -name "*.rpm" ! -name "*.src.rpm" ! -name "*debuginfo*" ! -name "*debugsource*" -exec cp {} /tmp/zfs-rpms/ \;
+# Copy ZFS userland packages, signed kernel modules, and MOK key from builder
+RUN mkdir -p /tmp/zfs-userland
+COPY --from=zfs-builder /tmp/zfs-userland/ /tmp/zfs-userland/
+COPY --from=zfs-builder /tmp/zfs-signed-modules/ /
 COPY --from=zfs-builder /etc/pki/mok/ /etc/pki/mok/
-COPY --from=zfs-builder /root/.gnupg/ /root/.gnupg/
 
 RUN --mount=type=secret,id=GHCR_PULL_TOKEN \
        export GHCR_AUTH_B64=$(echo -n "${GHCR_USERNAME}:$(cat /run/secrets/GHCR_PULL_TOKEN)" | base64 -w 0) \
@@ -95,8 +114,8 @@ RUN --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/p
     cockpit-files \
     python3-psycopg2 \
     python3-pip \
-    && dnf install -y /tmp/zfs-rpms/*.rpm \
-    && rm -rf /tmp/zfs-rpms \
+    && dnf install -y /tmp/zfs-userland/*.rpm \
+    && rm -rf /tmp/zfs-userland \
     && dnf clean all
 
 COPY rootfs/common/ /
