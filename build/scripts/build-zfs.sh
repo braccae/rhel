@@ -33,12 +33,6 @@ dnf install -y --skip-broken \
 
 log "✓ Build dependencies installed successfully"
 
-# Verify kernel directories exist
-if [ ! -d "/usr/lib/modules/${BOOTC_KERNEL_VERSION}" ]; then
-    log "ERROR: Kernel modules directory not found: /usr/lib/modules/${BOOTC_KERNEL_VERSION}"
-    exit 1
-fi
-
 # Get bootc kernel version
 BOOTC_KERNEL_VERSION=$(find /usr/lib/modules/ -maxdepth 1 -type d ! -path "/usr/lib/modules/" -printf "%f\n" | head -1)
 log "BOOTC_KERNEL_VERSION: ${BOOTC_KERNEL_VERSION}"
