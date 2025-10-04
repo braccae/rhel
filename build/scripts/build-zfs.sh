@@ -181,6 +181,8 @@ log "Repackaging kernel module RPMs with signed modules..."
 cd /tmp/zfs-repack
 REPACKAGED_COUNT=0
 
+# Temporarily disable set -e for debugging
+set +e
 for rpm in /tmp/zfs-kmod/*.rpm; do
     rpm_name=$(basename "$rpm")
     log "Repackaging: ${rpm_name}"
@@ -199,19 +201,37 @@ for rpm in /tmp/zfs-kmod/*.rpm; do
     cd ..
     
     log "Copying RPM with signed modules: ${rpm_name}"
+    log "Source: $rpm"
+    log "Destination: /tmp/zfs-signed-rpms/${rpm_name}"
+    log "Source exists: $(test -f "$rpm" && echo "YES" || echo "NO")"
+    log "Destination dir exists: $(test -d "/tmp/zfs-signed-rpms" && echo "YES" || echo "NO")"
+    
     if cp "$rpm" "/tmp/zfs-signed-rpms/${rpm_name}"; then
         ((REPACKAGED_COUNT++))
         log "✓ Successfully copied (modules already signed): ${rpm_name}"
+        log "Copy completed, continuing to cleanup..."
     else
-        log "✗ Failed to copy: ${rpm_name}"
+        copy_exit_code=$?
+        log "✗ Failed to copy: ${rpm_name} (exit code: ${copy_exit_code})"
         exit 1
     fi
     
     # Cleanup
-    rm -rf "$rpm_name"
+    log "Cleaning up: $rpm_name"
+    if [ -d "$rpm_name" ]; then
+        rm -rf "$rpm_name"
+        log "✓ Cleaned up directory: $rpm_name"
+    else
+        log "Directory $rpm_name does not exist, skipping cleanup"
+    fi
+    
+    log "✓ Completed processing: ${rpm_name}"
 done
 
+log "🔄 Loop completed, ${REPACKAGED_COUNT} RPMs processed"
 log "✓ Successfully repackaged ${REPACKAGED_COUNT} kernel module RPMs"
+# Re-enable set -e after the repackaging section
+set -e
 
 # Step 10: Clean up build artifacts
 log "Cleaning up build artifacts..."
