@@ -183,7 +183,13 @@ REPACKAGED_COUNT=0
 
 # Temporarily disable set -e for debugging
 set +e
-for rpm in /tmp/zfs-kmod/*.rpm; do
+for rpm in /tmp/zfs-kmod/kmod-*.rpm; do
+    # Only process kernel module RPMs (kmod-*)
+    # Skip debug RPMs
+    if [[ "$rpm" == *debug* ]]; then
+        log "Skipping debug RPM: $(basename "$rpm")"
+        continue
+    fi
     rpm_name=$(basename "$rpm")
     log "Repackaging: ${rpm_name}"
     
