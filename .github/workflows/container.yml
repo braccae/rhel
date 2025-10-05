@@ -7,6 +7,7 @@ on:
       - "Containerfile"
       - ".github/workflows/container.yml"
       - "build/scripts/build-zfs.sh"
+      - "rootfs/common/**"
   # schedule:
   #   - cron: "0 0 1/3 * *"
   workflow_dispatch:
