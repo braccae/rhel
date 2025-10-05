@@ -80,7 +80,6 @@ log "Converting MOK public key to signing location..."
 openssl x509 -inform DER -in /etc/pki/mok/LOCALMOK.der -outform PEM -out "${KERNEL_SOURCE_DIR}/certs/signing_key.x509"
 
 # Set proper permissions
-chmod 600 "${KERNEL_SOURCE_DIR}/certs/signing_key.pem"
 chmod 644 "${KERNEL_SOURCE_DIR}/certs/signing_key.x509"
 ls -al "${KERNEL_SOURCE_DIR}/certs"
 
