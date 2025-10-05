@@ -40,6 +40,8 @@ RUN mkdir -p /rhel_entitlement/etc-pki-entitlement \
     && cp /etc/yum.repos.d/redhat.repo /rhel_entitlement/etc-yum.repos.d/redhat/ \
     && cp /etc/pki/rpm-gpg/* /rhel_entitlement/etc-pki/rpm-gpg/
 
+RUN subscription-manager unregister
+
 FROM scratch
 
 WORKDIR /rhel_entitlement_files
