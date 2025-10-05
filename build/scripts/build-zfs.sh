@@ -70,19 +70,19 @@ if [ ! -f "/etc/pki/mok/LOCALMOK.der" ]; then
 fi
 
 # Create certs directory if it doesn't exist
-mkdir -p "/usr/src/kernels/${BOOTC_KERNEL_VERSION}/certs"
+mkdir -p "${KERNEL_SOURCE_DIR}/certs"
 
 # Convert private key from DER to PEM format
 log "Converting MOK private key from DER to PEM format..."
-openssl rsa -inform DER -in /run/secrets/LOCALMOK -outform PEM -out "/usr/src/kernels/${BOOTC_KERNEL_VERSION}/certs/signing_key.pem"
+openssl rsa -inform DER -in /run/secrets/LOCALMOK -outform PEM -out "${KERNEL_SOURCE_DIR}/certs/signing_key.pem"
 
 # Copy public key to signing location
 log "Converting MOK public key to signing location..."
-openssl x509 -inform DER -in /etc/pki/mok/LOCALMOK.der -outform PEM -out "/usr/src/kernels/${BOOTC_KERNEL_VERSION}/certs/signing_key.x509"
+openssl x509 -inform DER -in /etc/pki/mok/LOCALMOK.der -outform PEM -out "${KERNEL_SOURCE_DIR}/certs/signing_key.x509"
 
 # Set proper permissions
-chmod 600 "/usr/src/kernels/${BOOTC_KERNEL_VERSION}/certs/signing_key.pem"
-chmod 644 "/usr/src/kernels/${BOOTC_KERNEL_VERSION}/certs/signing_key.x509"
+chmod 600 "${KERNEL_SOURCE_DIR}/certs/signing_key.pem"
+chmod 644 "${KERNEL_SOURCE_DIR}/certs/signing_key.x509"
 
 log "✓ MOK keys converted and installed for kernel module signing"
 
@@ -113,7 +113,7 @@ mkdir -p /tmp/zfs-userland /tmp/zfs-kmod /tmp/zfs-rpms
 
 # Step 4: Separate userland and kernel module RPMs
 log "Separating RPMs into userland and kernel modules..."
-find "/tmp/${ZFS_VERSION}" -name "*.rpm" ! -name "*.src.rpm" ! -name "*debuginfo*" ! -name "*debugsource*" \
+find "/tmp/${ZFS_VERSION}" -type f -name "*.rpm" ! -name "*.src.rpm" ! -name "*debuginfo*" ! -name "*debugsource*" \
     \( -name "*kmod*" -exec cp {} /tmp/zfs-kmod/ \; \) \
     -o -exec cp {} /tmp/zfs-userland/ \;
 
