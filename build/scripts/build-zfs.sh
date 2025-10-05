@@ -121,7 +121,7 @@ find "/tmp/${ZFS_VERSION}" -type f -name "*.rpm" \
   ! -name "*debuginfo*" \
   ! -name "*debugsource*" \
   ! -name "*devel*" \
-  -exec cp -v {} /tmp/zfs-rpms/ ';'
+  -exec cp -v {} /tmp/zfs-rpms/ \;
 
 RPM_COUNT=$(find /tmp/zfs-rpms/ -maxdepth 1 -type f -name "*.rpm" | wc -l)
 log "Found ${RPM_COUNT} installable RPMs"
