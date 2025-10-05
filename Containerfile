@@ -18,7 +18,7 @@ RUN --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/p
     --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/rhsm,target=/etc/rhsm \
     --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/yum.repos.d,target=/etc/yum.repos.d \
     --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/pki/rpm-gpg,target=/etc/pki/rpm-gpg \
-    --mount=type=secret,id=LOCALMOK \
+    --mount=type=secret,mode=0600,id=LOCALMOK \
     ZFS_VERSION=$ZFS_VERSION \
     ENTITLEMENT_IMAGE=$ENTITLEMENT_IMAGE \
     ENTITLEMENT_TAG=$ENTITLEMENT_TAG \
