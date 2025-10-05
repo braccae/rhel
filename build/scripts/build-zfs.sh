@@ -29,7 +29,7 @@ dnf install -y --skip-broken \
    elfutils-libelf-devel kernel-devel kernel-abi-stablelists \
    python3 python3-devel python3-setuptools python3-cffi \
    libffi-devel python3-packaging dkms \
-   git wget ncompress curl rpmrebuild
+    git wget ncompress
 
 log "✓ Build dependencies installed successfully"
 
@@ -55,17 +55,40 @@ if [ -z "$KERNEL_SOURCE_DIR" ]; then
 fi
 log "KERNEL_SOURCE_DIR: ${KERNEL_SOURCE_DIR}"
 
-# Verify sign-file script exists
-if [ ! -f "${KERNEL_SOURCE_DIR}/scripts/sign-file" ]; then
-    log "ERROR: sign-file script not found at ${KERNEL_SOURCE_DIR}/scripts/sign-file"
-    log "Available scripts in ${KERNEL_SOURCE_DIR}/scripts/:"
-    ls -la "${KERNEL_SOURCE_DIR}/scripts/" || log "Scripts directory does not exist"
+# Step 1.5: Convert and install MOK keys for kernel module signing
+log "Converting MOK keys for kernel module signing..."
+
+# Check if MOK keys exist
+if [ ! -f "/run/secrets/LOCALMOK" ]; then
+    log "ERROR: MOK private key not found at /run/secrets/LOCALMOK"
     exit 1
 fi
 
+if [ ! -f "/etc/pki/mok/LOCALMOK.der" ]; then
+    log "ERROR: MOK public key not found at /etc/pki/mok/LOCALMOK.der"
+    exit 1
+fi
+
+# Create certs directory if it doesn't exist
+mkdir -p "/usr/src/kernels/${BOOTC_KERNEL_VERSION}/certs"
+
+# Convert private key from DER to PEM format
+log "Converting MOK private key from DER to PEM format..."
+openssl rsa -inform DER -in /run/secrets/LOCALMOK -outform PEM -out "/usr/src/kernels/${BOOTC_KERNEL_VERSION}/certs/signing_key.pem"
+
+# Copy public key to signing location
+log "Converting MOK public key to signing location..."
+openssl x509 -inform DER -in /etc/pki/mok/LOCALMOK.der -outform PEM -out "/usr/src/kernels/${BOOTC_KERNEL_VERSION}/certs/signing_key.x509"
+
+# Set proper permissions
+chmod 600 "/usr/src/kernels/${BOOTC_KERNEL_VERSION}/certs/signing_key.pem"
+chmod 644 "/usr/src/kernels/${BOOTC_KERNEL_VERSION}/certs/signing_key.x509"
+
+log "✓ MOK keys converted and installed for kernel module signing"
+
 # Step 2: Download and build ZFS
 log "Downloading and building ZFS..."
-cd /tmp
+cd /tmp || exit 1
 
 # Download ZFS source
 log "Downloading ZFS version: ${ZFS_VERSION}"
@@ -74,7 +97,7 @@ wget "https://github.com/openzfs/zfs/releases/download/${ZFS_VERSION}/${ZFS_VERS
 # Extract and build
 log "Extracting ZFS source..."
 tar -xzf "${ZFS_VERSION}.tar.gz"
-cd "${ZFS_VERSION}"
+cd "${ZFS_VERSION}" || exit 1
 
 log "Configuring ZFS build..."
 ./configure --with-spec=redhat
@@ -86,7 +109,7 @@ log "✓ ZFS RPMs built successfully"
 
 # Step 3: Create directories for processing
 log "Creating directories for RPM processing..."
-mkdir -p /tmp/zfs-userland /tmp/zfs-kmod /tmp/zfs-extracted /tmp/zfs-repack /tmp/zfs-signed-rpms
+mkdir -p /tmp/zfs-userland /tmp/zfs-kmod /tmp/zfs-rpms
 
 # Step 4: Separate userland and kernel module RPMs
 log "Separating RPMs into userland and kernel modules..."
@@ -105,113 +128,8 @@ if [ "$KMOD_COUNT" -eq 0 ]; then
     exit 1
 fi
 
-# Step 5: Extract all kernel module RPMs at once
-log "Extracting all kernel module RPMs..."
-cd /tmp/zfs-extracted
-for rpm in /tmp/zfs-kmod/*.rpm; do
-    log "Extracting: $(basename "$rpm")"
-    rpm2cpio "$rpm" | cpio -idmv
-done
-log "✓ All kernel module RPMs extracted."
-
-# Step 6: Find kernel modules to sign
-log "Looking for kernel modules to sign..."
-mapfile -t MODULES < <(find /tmp/zfs-extracted -name "*.ko")
-MODULE_COUNT=${#MODULES[@]}
-
-if [ "$MODULE_COUNT" -eq 0 ]; then
-    log "WARNING: No kernel modules found to sign!"
-    exit 1
-fi
-
-log "Found ${MODULE_COUNT} kernel modules to sign: ${MODULES[*]}"
-
-# Step 7: Check if signing key is available
-if [ ! -f "/run/secrets/LOCALMOK" ]; then
-    log "ERROR: LOCALMOK secret not found at /run/secrets/LOCALMOK"
-    exit 1
-fi
-if [ ! -f "/etc/pki/mok/LOCALMOK.der" ]; then
-    log "ERROR: LOCALMOK.der public key not found at /etc/pki/mok/LOCALMOK.der"
-    exit 1
-fi
-log "✓ Signing keys verified"
-
-# Step 8: Sign extracted kernel modules
-log "Signing kernel modules..."
-SIGNED_COUNT=0
-for module in "${MODULES[@]}"; do
-    log "Signing: $(basename "$module")"
-    if ! "${KERNEL_SOURCE_DIR}/scripts/sign-file" \
-        sha256 \
-        /run/secrets/LOCALMOK \
-        /etc/pki/mok/LOCALMOK.der \
-        "$module"; then
-        log "✗ Failed to sign: $(basename "$module")"
-        exit 1
-    fi
-    ((SIGNED_COUNT++))
-done
-log "✓ Successfully signed ${SIGNED_COUNT} kernel modules"
-
-# Step 9: Repackage kernel module RPMs with signed modules
-log "Repackaging kernel module RPMs..."
-dnf install -y rpmrebuild
-REPACKAGED_COUNT=0
-
-for rpm in /tmp/zfs-kmod/*.rpm; do
-    rpm_name=$(basename "$rpm")
-    log "Repackaging: ${rpm_name}"
-
-    # Temporarily install the RPM. Use --force to handle if it's already installed.
-    log "Installing ${rpm_name} temporarily..."
-    rpm -i --force "$rpm"
-    
-    package_name=$(rpm -qp --queryformat '%{NAME}' "$rpm")
-
-    # Overwrite the installed, unsigned .ko files with our signed versions
-    log "Replacing installed kernel modules with signed versions..."
-    installed_kos=$(rpm -ql "$package_name" | grep '\.ko$' ' module_path; do
-    module_basename=$(basename "$module_path")
-    # Find the corresponding signed module in our central directory
-    signed_module=$(find /tmp/zfs-extracted/usr -name "$module_basename")
-
-    if [ -f "$signed_module" ]; then
-        echo "Replacing $module_path with $signed_module" >> "$log_file"
-        cp -f "$signed_module" "$module_path"
-    else
-        echo "✗ ERROR: Could not find signed module for $module_basename" >> "$log_file"
-        exit 1
-    fi
-done
-echo "--- Finished update_kmod.sh ---" >> "$log_file"
-EOF
-chmod +x /tmp/update_kmod.sh
-
-for rpm in /tmp/zfs-kmod/*.rpm; do
-    rpm_name=$(basename "$rpm")
-    log "Repackaging: ${rpm_name}"
-
-    # Use rpmrebuild with our script as the editor to replace the files non-interactively
-    # The resulting RPM will be placed in /tmp/zfs-signed-rpms/
-    EDITOR=/tmp/update_kmod.sh rpmrebuild --batch --directory /tmp/zfs-signed-rpms "$rpm"
-
-    if [ -f "/tmp/zfs-signed-rpms/$rpm_name" ]; then
-        ((REPACKAGED_COUNT++))
-        log "✓ Successfully repackaged ${rpm_name}"
-    else
-        log "✗ Failed to repackage ${rpm_name}"
-        # rpmrebuild should have already exited with an error, but just in case
-        exit 1
-    fi
-done
-rm /tmp/update_kmod.sh
-log "✓ Successfully repackaged ${REPACKAGED_COUNT} kernel module RPMs"
-
-
-# Step 10: Copy installable RPMs to zfs-rpms directory
+# Step 5: Copy installable RPMs to zfs-rpms directory
 log "Copying installable RPMs to /tmp/zfs-rpms/..."
-mkdir -p /tmp/zfs-rpms
 
 # Copy userland RPMs (excluding source, debug, devel, and debugsource RPMs)
 for rpm in /tmp/zfs-userland/*.rpm; do
@@ -223,10 +141,10 @@ for rpm in /tmp/zfs-userland/*.rpm; do
     fi
 done
 
-# Copy signed kernel module RPMs (excluding source, debug, devel, and debugsource RPMs)
-for rpm in /tmp/zfs-signed-rpms/*.rpm; do
-    if [ -f "$rpm" ] && [[ "$rpm" != *.src.rpm && "$rpm" != *debug* && "$rpm" != *devel* && "$rpm" != *debugsource* ]]; then
-        log "Copying signed kernel module RPM: $(basename "$rpm")"
+# Copy kernel module RPMs (excluding source, debug, devel, and debugsource RPMs)
+for rpm in /tmp/zfs-kmod/*.rpm; do
+    if [[ "$rpm" != *.src.rpm && "$rpm" != *debug* && "$rpm" != *devel* && "$rpm" != *debugsource* ]]; then
+        log "Copying kernel module RPM: $(basename "$rpm")"
         cp "$rpm" /tmp/zfs-rpms/
     else
         log "Skipping RPM: $(basename "$rpm")"
@@ -242,18 +160,6 @@ log "=========================================="
 log "Summary:"
 log "  - ZFS Version: ${ZFS_VERSION}"
 log "  - Kernel Version: ${BOOTC_KERNEL_VERSION}"
-log "  - Kernel Modules Signed: ${SIGNED_COUNT}"
-log "  - RPMs Repackaged: ${REPACKAGED_COUNT}"
-log ""
-log "Signed RPMs created:"
-if [ -n "$(find /tmp/zfs-signed-rpms/ -maxdepth 1 -type f -name "*.rpm" -print -quit)" ]; then
-    find /tmp/zfs-signed-rpms/ -maxdepth 1 -type f -name "*.rpm" -exec ls -la {} \; | while read -r line; do
-        log "  $line"
-    done
-else
-    log "  (No signed RPMs found)"
-fi
-
 log ""
 log "Userland RPMs available:"
 if [ -n "$(find /tmp/zfs-userland/ -maxdepth 1 -type f -name "*.rpm" -print -quit)" ]; then
@@ -262,6 +168,16 @@ if [ -n "$(find /tmp/zfs-userland/ -maxdepth 1 -type f -name "*.rpm" -print -qui
     done
 else
     log "  (No userland RPMs found)"
+fi
+
+log ""
+log "Kernel module RPMs available:"
+if [ -n "$(find /tmp/zfs-kmod/ -maxdepth 1 -type f -name "*.rpm" -print -quit)" ]; then
+    find /tmp/zfs-kmod/ -maxdepth 1 -type f -name "*.rpm" -exec ls -la {} \; | while read -r line; do
+        log "  $line"
+    done
+else
+    log "  (No kernel module RPMs found)"
 fi
 
 log ""
