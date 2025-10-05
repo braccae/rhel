@@ -110,7 +110,14 @@ log "✓ ZFS RPMs built successfully"
 # Step 3: Grab all installable RPMs in one step
 log "Creating directory and copying installable RPMs..."
 mkdir -p /tmp/zfs-rpms
-find "/tmp/${ZFS_VERSION}" -type f -name "*.rpm" ! -name "*.src.rpm" ! -name "*debuginfo*" ! -name "*debugsource*" ! -name "*devel*" -exec cp {} /tmp/zfs-rpms/ \;
+find "/tmp/${ZFS_VERSION}" -type f -name "*.rpm" -print;
+
+find "/tmp/${ZFS_VERSION}" -type f -name "*.rpm" \
+  ! -name "*.src.rpm" \
+  ! -name "*debuginfo*" \
+  ! -name "*debugsource*" \
+  ! -name "*devel*" \
+  -print -exec cp -v {} /tmp/zfs-rpms/ +
 
 RPM_COUNT=$(find /tmp/zfs-rpms/ -maxdepth 1 -type f -name "*.rpm" | wc -l)
 log "Found ${RPM_COUNT} installable RPMs"
