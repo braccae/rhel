@@ -40,8 +40,8 @@ if mokutil --list-enrolled 2>/dev/null | grep -q "LOCALMOK"; then
     :
 else
     if [[ "$SECURE_BOOT_ENABLED" == "true" ]]; then
-        # Auto-enroll MOK key with configured password
-        echo "$MOK_PASSWORD" | mokutil --import "$MOK_CERT"
+        # Auto-enroll MOK key with configured password (twice for confirmation)
+        printf "%s\n%s\n" "$MOK_PASSWORD" "$MOK_PASSWORD" | mokutil --import "$MOK_CERT"
     fi
 fi
 
