@@ -107,49 +107,18 @@ make -j1 rpm-utils rpm-kmod
 
 log "✓ ZFS RPMs built successfully"
 
-# Step 3: Create directories for processing
-log "Creating directories for RPM processing..."
-mkdir -p /tmp/zfs-userland /tmp/zfs-kmod /tmp/zfs-rpms
+# Step 3: Grab all installable RPMs in one step
+log "Creating directory and copying installable RPMs..."
+mkdir -p /tmp/zfs-rpms
+find "/tmp/${ZFS_VERSION}" -type f -name "*.rpm" ! -name "*.src.rpm" ! -name "*debuginfo*" ! -name "*debugsource*" ! -name "*devel*" -exec cp {} /tmp/zfs-rpms/ \;
 
-# Step 4: Separate userland and kernel module RPMs
-log "Separating RPMs into userland and kernel modules..."
-find "/tmp/${ZFS_VERSION}" -type f -name "*.rpm" ! -name "*.src.rpm" ! -name "*debuginfo*" ! -name "*debugsource*" \
-    \( -name "*kmod*" -exec cp {} /tmp/zfs-kmod/ \; \) \
-    -o -exec cp {} /tmp/zfs-userland/ \;
+RPM_COUNT=$(find /tmp/zfs-rpms/ -maxdepth 1 -type f -name "*.rpm" | wc -l)
+log "Found ${RPM_COUNT} installable RPMs"
 
-KMOD_COUNT=$(find /tmp/zfs-kmod/ -maxdepth 1 -type f -name "*.rpm" | wc -l)
-USERLAND_COUNT=$(find /tmp/zfs-userland/ -maxdepth 1 -type f -name "*.rpm" | wc -l)
-
-log "Found ${KMOD_COUNT} kernel module RPMs"
-log "Found ${USERLAND_COUNT} userland RPMs"
-
-if [ "$KMOD_COUNT" -eq 0 ]; then
-    log "ERROR: No kernel module RPMs found!"
+if [ "$RPM_COUNT" -eq 0 ]; then
+    log "ERROR: No installable RPMs found!"
     exit 1
 fi
-
-# Step 5: Copy installable RPMs to zfs-rpms directory
-log "Copying installable RPMs to /tmp/zfs-rpms/..."
-
-# Copy userland RPMs (excluding source, debug, devel, and debugsource RPMs)
-for rpm in /tmp/zfs-userland/*.rpm; do
-    if [[ "$rpm" != *.src.rpm && "$rpm" != *debug* && "$rpm" != *devel* && "$rpm" != *debugsource* ]]; then
-        log "Copying userland RPM: $(basename "$rpm")"
-        cp "$rpm" /tmp/zfs-rpms/
-    else
-        log "Skipping RPM: $(basename "$rpm")"
-    fi
-done
-
-# Copy kernel module RPMs (excluding source, debug, devel, and debugsource RPMs)
-for rpm in /tmp/zfs-kmod/*.rpm; do
-    if [[ "$rpm" != *.src.rpm && "$rpm" != *debug* && "$rpm" != *devel* && "$rpm" != *debugsource* ]]; then
-        log "Copying kernel module RPM: $(basename "$rpm")"
-        cp "$rpm" /tmp/zfs-rpms/
-    else
-        log "Skipping RPM: $(basename "$rpm")"
-    fi
-done
 
 log "✓ Copied installable RPMs to /tmp/zfs-rpms/"
 
