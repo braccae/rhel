@@ -73,8 +73,8 @@ fi
 mkdir -p "${KERNEL_SOURCE_DIR}/certs"
 
 # Convert private key from DER to PEM format
-log "Converting MOK private key from DER to PEM format..."
-openssl rsa -inform DER -in /run/secrets/LOCALMOK -outform PEM -out "${KERNEL_SOURCE_DIR}/certs/signing_key.pem"
+log "Linking MOK private key to kernel source dir..."
+ln -s /run/secrets/LOCALMOK "${KERNEL_SOURCE_DIR}/certs/signing_key.pem"
 
 # Copy public key to signing location
 log "Converting MOK public key to signing location..."
