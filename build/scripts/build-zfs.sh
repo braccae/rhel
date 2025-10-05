@@ -83,6 +83,7 @@ openssl x509 -inform DER -in /etc/pki/mok/LOCALMOK.der -outform PEM -out "${KERN
 # Set proper permissions
 chmod 600 "${KERNEL_SOURCE_DIR}/certs/signing_key.pem"
 chmod 644 "${KERNEL_SOURCE_DIR}/certs/signing_key.x509"
+ls -al "${KERNEL_SOURCE_DIR}/certs"
 
 log "✓ MOK keys converted and installed for kernel module signing"
 
@@ -110,14 +111,17 @@ log "✓ ZFS RPMs built successfully"
 # Step 3: Grab all installable RPMs in one step
 log "Creating directory and copying installable RPMs..."
 mkdir -p /tmp/zfs-rpms
+
+log "List of all RPMS found:"
 find "/tmp/${ZFS_VERSION}" -type f -name "*.rpm" -print;
+log "-----------------------"
 
 find "/tmp/${ZFS_VERSION}" -type f -name "*.rpm" \
   ! -name "*.src.rpm" \
   ! -name "*debuginfo*" \
   ! -name "*debugsource*" \
   ! -name "*devel*" \
-  -print -exec cp -v {} /tmp/zfs-rpms/ +
+  -exec cp -v {} /tmp/zfs-rpms/ +
 
 RPM_COUNT=$(find /tmp/zfs-rpms/ -maxdepth 1 -type f -name "*.rpm" | wc -l)
 log "Found ${RPM_COUNT} installable RPMs"
