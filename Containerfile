@@ -72,4 +72,6 @@ RUN --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/p
 
 COPY rootfs/common/ /
 
+RUN systemctl enable mok-enrollment.service
+
 RUN bootc container lint
