@@ -43,6 +43,8 @@ RUN --mount=type=secret,id=GHCR_PULL_TOKEN \
     && echo "{\"auths\": {\"ghcr.io\": {\"auth\": \"$GHCR_AUTH_B64\"}}}" > /etc/ostree/auth.json \
     && chmod 0600 /etc/ostree/auth.json
 
+COPY build/scripts /tmp/build_scripts
+
 RUN --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/pki/entitlement,target=/etc/pki/entitlement \
     --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/rhsm,target=/etc/rhsm \
     --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/yum.repos.d,target=/etc/yum.repos.d \
@@ -68,10 +70,12 @@ RUN --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/p
     python3-pip \
     && dnf install -y /tmp/zfs-rpms/*.rpm \
     && rm -rf /tmp/zfs-rpms \
+    && bash /tmp/build_scripts/wazuh-agent.sh \
+    && curl -LsSf https://astral.sh/uv/install.sh | env UV_UNMANAGED_INSTALL="/usr/bin" sh \
     && dnf clean all
 
 COPY rootfs/common/ /
 
-RUN systemctl enable mok-enrollment.service
+RUN systemctl enable mok-enrollment.service tailscaled
 
 RUN bootc container lint
