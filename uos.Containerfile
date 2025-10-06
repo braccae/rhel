@@ -13,8 +13,4 @@ RUN echo $(uname -m) && echo ${uos_aarch64} && echo ${uos_x86_64}
 RUN case $(uname -m) in aarch64) curl -o install -L ${uos_aarch64} ;; x86_64) curl -o install -L ${uos_x86_64} ;; esac
 RUN chmod +x /tmp/uos/install
 
-RUN --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/pki/entitlement,target=/etc/pki/entitlement \
-    --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/rhsm,target=/etc/rhsm \
-    --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/yum.repos.d,target=/etc/yum.repos.d \
-    --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/pki/rpm-gpg,target=/etc/pki/rpm-gpg \
-    echo "y" | /tmp/uos/install
+RUN echo "y" | /tmp/uos/install
