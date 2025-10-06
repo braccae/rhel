@@ -2,6 +2,6 @@
 gpgcheck=1
 gpgkey=https://packages.wazuh.com/key/GPG-KEY-WAZUH
 enabled=1
-name=EL-\$releasever - Wazuh
+name=EL-9 - Wazuh
 baseurl=https://packages.wazuh.com/4.x/yum/
 priority=1
