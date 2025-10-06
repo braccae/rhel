@@ -1,4 +1,4 @@
-name: Build and Publish HCI Container
+name: Build and Publish UOS Container
 
 on:
   workflow_run:

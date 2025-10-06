@@ -1,5 +1,8 @@
 FROM ghcr.io/braccae/rhel AS base
 
+ARG ENTITLEMENT_IMAGE=ghcr.io/braccae/rhel
+ARG ENTITLEMENT_TAG=repos
+
 WORKDIR /tmp/uos
 
 ARG uos_aarch64="https://fw-download.ubnt.com/data/unifi-os-server/9add-linux-arm64-4.3.6-e74730ee-657b-4b65-9b2e-1c90aabc9ee3.6-arm64"
