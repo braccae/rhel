@@ -10,6 +10,8 @@ on:
     branches: ["main"]
     paths:
       - "repos.Containerfile"
+      - "repos/**"
+      - ".github/workflows/container-repos.yml"
   schedule:
     - cron: "0 0 1/3 * *"
 
