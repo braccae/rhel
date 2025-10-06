@@ -11,6 +11,7 @@ ARG uos_x86_64="https://fw-download.ubnt.com/data/unifi-os-server/2f3a-linux-x64
 RUN echo $(uname -m) && echo ${uos_aarch64} && echo ${uos_x86_64}
 
 RUN case $(uname -m) in aarch64) curl -o install -L ${uos_aarch64} ;; x86_64) curl -o install -L ${uos_x86_64} ;; esac
+RUN chmod +x /tmp/uos/install
 
 RUN --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/pki/entitlement,target=/etc/pki/entitlement \
     --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/rhsm,target=/etc/rhsm \
