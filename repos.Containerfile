@@ -23,7 +23,6 @@ RUN EPEL_URL="https://dl.fedoraproject.org/pub/epel/epel-release-latest-$(rpm -E
     $EPEL_URL $RPMFUSION_FREE_URL $RPMFUSION_NONFREE_URL
 
 RUN rpm --import https://packages.wazuh.com/key/GPG-KEY-WAZUH
-COPY repos/wazuh.repo /etc/yum.repos.d/wazuh.repo
 
 RUN mkdir -p /rhel_entitlement/etc-pki-entitlement \
     && mkdir -p /rhel_entitlement/etc-rhsm \
@@ -48,4 +47,6 @@ COPY --from=build /rhel_entitlement/etc-rhsm /etc/rhsm
 COPY --from=build /rhel_entitlement/etc-yum.repos.d /etc/yum.repos.d
 COPY --from=build /rhel_entitlement/etc-yum.repos.d/external /etc/yum.repos.d/
 COPY --from=build /rhel_entitlement/etc-pki/rpm-gpg/* /etc/pki/rpm-gpg/
+
 ADD https://pkgs.tailscale.com/stable/rhel/9/tailscale.repo /etc/yum.repos.d/
+COPY repos/wazuh.repo /etc/yum.repos.d/
