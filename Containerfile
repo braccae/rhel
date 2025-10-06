@@ -68,9 +68,11 @@ RUN --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/p
     cockpit-files \
     python3-psycopg2 \
     python3-pip \
+    wazuh-agent \
+    && mv /var/ossec /usr/ossec \
+    && sed -i 's|/var/ossec|/usr/ossec|g' /usr/lib/systemd/system/wazuh-agent.service \
     && dnf install -y /tmp/zfs-rpms/*.rpm \
     && rm -rf /tmp/zfs-rpms \
-    && bash /tmp/build_scripts/wazuh-agent.sh \
     && curl -LsSf https://astral.sh/uv/install.sh | env UV_UNMANAGED_INSTALL="/usr/bin" sh \
     && dnf clean all
 
