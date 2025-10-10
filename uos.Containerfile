@@ -22,10 +22,11 @@ RUN chmod +x /tmp/uos/install
 
 #debug
 RUN df -h / 
-RUN df -h /home 
 RUN df -h /var/lib 
 RUN df -h /usr/local/bin 
 RUN df -h /tmp 
 RUN df -h /var/tmp
 
-RUN echo "y" | /tmp/uos/install
+RUN mkdir -p /home \
+    && echo "y" | /tmp/uos/install \
+    rm -r /home
