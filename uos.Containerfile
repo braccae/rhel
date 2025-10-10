@@ -10,6 +10,10 @@ RUN --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/p
     dnf install -y \
     slirp4netns
 
+WORKDIR /tmp/faker
+COPY build/scripts/fake-loginctl.sh ./loginctl
+RUN chmod +x ./loginctl
+
 WORKDIR /tmp/uos
 
 ARG uos_aarch64="https://fw-download.ubnt.com/data/unifi-os-server/9add-linux-arm64-4.3.6-e74730ee-657b-4b65-9b2e-1c90aabc9ee3.6-arm64"
@@ -21,5 +25,6 @@ RUN case $(uname -m) in aarch64) curl -o install -L ${uos_aarch64} ;; x86_64) cu
 RUN chmod +x /tmp/uos/install
 
 RUN mkdir -p /var/home \
-    && echo "y" | /tmp/uos/install \
-    rm -r /var/home
+    && echo "y" | PATH=/tmp/faker:$PATH /tmp/uos/install \
+    rm -r /var/home \
+    && echo "f /var/lib/systemd/linger/uosserver 0644 root root - -" | sudo tee /etc/tmpfiles.d/uosserver.conf > /dev/null
