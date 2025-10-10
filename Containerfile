@@ -51,6 +51,7 @@ RUN --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/p
     --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/pki/rpm-gpg,target=/etc/pki/rpm-gpg \
     dnf install -y \
     borgbackup \
+    borgmatic \
     qemu-guest-agent \
     container-selinux \
     glances \
