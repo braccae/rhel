@@ -20,4 +20,12 @@ RUN echo $(uname -m) && echo ${uos_aarch64} && echo ${uos_x86_64}
 RUN case $(uname -m) in aarch64) curl -o install -L ${uos_aarch64} ;; x86_64) curl -o install -L ${uos_x86_64} ;; esac
 RUN chmod +x /tmp/uos/install
 
+#debug
+RUN df -h / 
+RUN df -h /home 
+RUN df -h /var/lib 
+RUN df -h /usr/local/bin 
+RUN df -h /tmp 
+RUN df -h /var/tmp
+
 RUN echo "y" | /tmp/uos/install
