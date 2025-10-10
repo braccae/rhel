@@ -1,0 +1,6 @@
+#!/bin/sh
+# Dummy systemctl script
+
+echo "Faked 'systemctl' call with parameters: $*. Skipping actual service control in container."
+# Exit with status 0 (success) to allow the installer to proceed.
+exit 0
