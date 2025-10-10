@@ -52,6 +52,11 @@ RUN --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/p
     dnf install -y \
     borgbackup \
     qemu-guest-agent \
+    container-selinux \
+    glances \
+    tuned \
+    realmd \
+    sssd \
     tailscale \
     firewalld \
     sqlite \
