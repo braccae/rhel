@@ -1,0 +1,12 @@
+#!/bin/sh
+# Dummy modprobe script
+# Simulate loading macvlan successfully, but also handle persistence file creation.
+
+if [ "$1" = "macvlan" ]; then
+    echo "Faked 'modprobe macvlan'. Skipping actual module loading in container."
+    # The installer might check for a successful exit status.
+    exit 0
+fi
+
+# Exit successfully for any other usage as well.
+exit 0

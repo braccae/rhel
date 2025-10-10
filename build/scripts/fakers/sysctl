@@ -1,0 +1,7 @@
+#!/bin/sh
+# Dummy sysctl script
+# Simulate successful execution while logging the attempt.
+
+echo "Faked 'sysctl' call with parameters: $*. Skipping actual kernel parameter changes in container."
+# Return 0 to indicate success, overriding the "permission denied" error.
+exit 0

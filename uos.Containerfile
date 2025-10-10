@@ -11,8 +11,8 @@ RUN --mount=type=bind,from=${ENTITLEMENT_IMAGE}:${ENTITLEMENT_TAG},source=/etc/p
     slirp4netns
 
 WORKDIR /tmp/faker
-COPY build/scripts/fake-loginctl.sh ./loginctl
-RUN chmod +x ./loginctl
+COPY build/scripts/fakers/* ./
+RUN chmod -fRv +x ./
 
 WORKDIR /tmp/uos
 
@@ -27,4 +27,11 @@ RUN chmod +x /tmp/uos/install
 RUN mkdir -p /var/home \
     && echo "y" | PATH=/tmp/faker:$PATH /tmp/uos/install \
     rm -r /var/home \
-    && echo "f /var/lib/systemd/linger/uosserver 0644 root root - -" | sudo tee /etc/tmpfiles.d/uosserver.conf > /dev/null
+    && echo "f /var/lib/systemd/linger/uosserver 0644 root root - -" | sudo tee /etc/tmpfiles.d/uosserver.conf > /dev/null \
+    echo "### Settings required by Unifi OS ###" > /etc/sysctl.d/99-uos-settings.conf && \
+    echo "kernel.yama.ptrace_scope = 0" >> /etc/sysctl.d/99-uos-settings.conf && \
+    echo "fs.suid_dumpable = 1" >> /etc/sysctl.d/99-uos-settings.conf && \
+    echo "net.ipv4.ip_forward = 1" >> /etc/sysctl.d/99-uos-settings.conf && \
+    echo "net.ipv4.conf.default.rp_filter = 1" >> /etc/sysctl.d/99-uos-settings.conf && \
+    echo "net.ipv4.conf.lo.rp_filter = 1" >> /etc/sysctl.d/99-uos-settings.conf && \
+    echo "net.ipv4.ping_group_range = 0 2147483647" >> /etc/sysctl.d/99-uos-settings.conf
