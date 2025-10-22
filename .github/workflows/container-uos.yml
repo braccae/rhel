@@ -1,16 +1,16 @@
 name: Build and Publish UOS Container
 
 on:
-  workflow_run:
-    workflows: ["Build and Publish Main Container"]
-    types:
-      - completed
-    branches:
-      - main
-  push:
-    branches: ["main"]
-    paths:
-      - "uos.Containerfile"
+  # workflow_run:
+  #   workflows: ["Build and Publish Main Container"]
+  #   types:
+  #     - completed
+  #   branches:
+  #     - main
+  # push:
+  #   branches: ["main"]
+  #   paths:
+  #     - "uos.Containerfile"
   workflow_dispatch:
 
 concurrency:
